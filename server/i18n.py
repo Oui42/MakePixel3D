@@ -54,6 +54,18 @@ EN = {
     "Opisujesz obiekt słowami, a program sam tworzy obraz, model 3D i sprite'y (bez szukania zdjęć).":
         "Describe an object in words and the program creates the image, 3D model and sprites (no photo needed).",
     "Lepszy tył obiektu": "Better back side",
+    # S8: tekst → obraz
+    "obraz: FLUX.1-schnell (6,8 GB)": "image: FLUX.1-schnell (6.8 GB)",
+    "tekst: koder T5 (3,3 GB)": "text: T5 encoder (3.3 GB)",
+    "pozostałe składniki (0,5 GB)": "remaining components (0.5 GB)",
+    "po pobraniu brakuje plików modelu": "model files are missing after the download",
+    "Nie udało się pobrać modelu: {exc}": "Could not download the model: {exc}",
+    "Wczytywanie modelu obrazu (pierwszy raz trwa dłużej)…": "Loading the image model (the first time takes longer)…",
+    "Wpisz, co ma przedstawiać obraz.": "Type what the image should show.",
+    "Model tekst → obraz nie jest zainstalowany.": "The text → image model is not installed.",
+    "Generowanie obrazu…": "Generating the image…",
+    "Ten komputer nie spełnia wymagań: {why}": "This computer does not meet the requirements: {why}",
+    "Błąd generowania obrazu: {exc}": "Image generation error: {exc}",
     "AI dorysowuje widoki z innych stron, zanim powstanie model 3D – wyraźnie lepsze boki i tył.":
         "AI draws views from other sides before the 3D model is built – much better sides and back.",
     "Szkielet i animacje ruchu": "Skeleton and motion animations",

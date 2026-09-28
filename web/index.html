@@ -89,6 +89,17 @@
           <button id="btnMask" class="block" type="button" hidden title="Pędzlem przywróć fragment obiektu albo usuń resztki tła">Popraw tło ręcznie</button>
           <div class="or"><span>albo</span></div>
           <label class="btn block" id="glbLabel">Wczytaj gotowy model 3D (.glb)<input id="glbFile" type="file" accept=".glb,.gltf" hidden></label>
+          <!-- S8: tekst → obraz (widoczne, gdy funkcja zaawansowana jest zainstalowana) -->
+          <div id="t2iBlock" hidden>
+            <div class="or"><span>albo</span></div>
+            <label class="lbl" for="t2iPrompt">Opisz słowami – AI stworzy obraz</label>
+            <textarea id="t2iPrompt" rows="3" placeholder="np. medieval knight in plate armor, full body" title="Najlepsze wyniki daje opis po angielsku"></textarea>
+            <div class="row compact">
+              <label title="To samo ziarno = ten sam obraz dla tego samego opisu">Ziarno <input id="t2iSeed" type="number" min="0" max="2147483647" placeholder="losowe"></label>
+            </div>
+            <button id="btnT2I" class="block primary" type="button">Wygeneruj obraz z opisu</button>
+            <p id="t2iStatus" class="status"></p>
+          </div>
         </section>
       </div>
 
@@ -348,6 +359,7 @@
       </ol>
       <div class="welcome-actions">
         <button id="welcomePhoto" class="primary">Wybierz zdjęcie</button>
+        <button id="welcomeText" hidden title="Funkcja AI: obraz z opisu słownego">Opisz słowami</button>
         <button id="welcomeGlb">Wczytaj model 3D (.glb)</button>
       </div>
       <p class="muted">Możesz też przeciągnąć plik w dowolne miejsce okna.</p>

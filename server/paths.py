@@ -42,6 +42,9 @@ CACHE = DATA / "cache"
 # Modele AI: instalator pobiera je obok programu (models/). Gdy folderu programu nie da się zapisać, a modeli
 # przy nim nie ma – pobieramy je do folderu danych.
 MODELS = PROJECT / "models" if (PROJECT_WRITABLE or (PROJECT / "models").is_dir()) else DATA / "models"
+# Modele funkcji zaawansowanych (S8–S10) pobierane NA ŻĄDANIE już po instalacji – muszą trafić do folderu zapisywalnego
+# dla zwykłego użytkownika (w Program Files nie da się pisać bez administratora).
+FEATURE_MODELS = (PROJECT / "models" if PROJECT_WRITABLE else DATA / "models") / "features"
 
 
 def describe() -> dict:

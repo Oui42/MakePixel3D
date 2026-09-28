@@ -119,6 +119,22 @@ def preload():
         _set_stage("idle")
 
 
+def unload():
+    """Zwolnienie modelu 3D z pamięci karty – na czas pracy cięższych funkcji (S8 tekst → obraz). Następne
+    generowanie 3D wczyta go ponownie (_load jest leniwe, ~1 s z mmap)."""
+    global _model
+    with _lock:
+        if _model is None:
+            return
+        _model = None
+        import gc
+        gc.collect()
+        if device() == "cuda":
+            import torch
+            torch.cuda.empty_cache()
+        print("[3D] model zwolniony z pamięci", flush=True)
+
+
 def _prepare_input(rgba: Image.Image) -> Image.Image:
     """Jak w run.py z TripoSR: obiekt wyśrodkowany na szarym tle."""
     from tsr.utils import resize_foreground

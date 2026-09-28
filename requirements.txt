@@ -10,10 +10,16 @@ trimesh>=4.0
 omegaconf>=2.3
 einops>=0.7
 imageio>=2.30
-huggingface_hub>=0.23
+huggingface_hub>=0.34,<1.0
 # model downloads must trust the Windows certificate store (antivirus / proxy replacing HTTPS certificates)
 truststore>=0.9
 # TripoSR loads ViT weights with the old layer names - transformers 5.x renamed them
 transformers>=4.40,<5
 # program window (WebView2 is built into Windows 11)
 pywebview>=5.0
+# advanced AI feature S8 (text -> image): FLUX.1-schnell in GGUF via diffusers; model files are downloaded on demand
+diffusers>=0.36
+gguf>=0.10
+accelerate>=1.0
+sentencepiece>=0.2
+protobuf>=4

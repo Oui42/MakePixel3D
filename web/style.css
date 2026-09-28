@@ -324,3 +324,11 @@ h1 .logo { image-rendering: pixelated; }
 
 .models-bar { background: var(--danger); color: #fff; }
 .models-bar .primary { color: var(--danger); background: #fff; }
+
+/* S8: tekst → obraz (zakładka Źródło) + przycisk instalacji w oknie „Sprzęt i zaawansowane AI” */
+#t2iBlock .lbl { display: block; font-size: 13px; margin: 4px 0; }
+#t2iPrompt { width: 100%; box-sizing: border-box; resize: vertical; min-height: 56px; font: inherit; font-size: 13px;
+             padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: inherit; }
+#t2iPrompt:focus { outline: none; border-color: var(--accent); }
+#t2iSeed { width: 110px; }
+.feat-install { display: flex; align-items: center; gap: 10px; margin-top: 6px; font-size: 12.5px; }

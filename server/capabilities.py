@@ -20,7 +20,9 @@ FEATURES = {
         # FLUX.1-schnell w wersji skwantyzowanej (fp8 / NF4, ~6–8 GB VRAM przy generowaniu) – pełna wersja bf16
         # potrzebowałaby ~24 GB. 10 GB = zapas na model 3D wczytany obok. Karta „12 GB” zgłasza 11.9 GB (GiB),
         # dlatego wymagania nie mogą być równe nominalnej pojemności karty (zgłoszenie użytkownika, RTX 5070).
-        "vram": 10, "ram": 16, "disk": 20,
+        # RAM: po wczytaniu koder T5 (bf16, 9,5 GB) i transformer (7 GB) siedzą w RAM między generowaniami
+        # (cpu offload) – zmierzone 28.09.2026; 16 GB RAM oznaczałoby ciągłe swapowanie.
+        "vram": 10, "ram": 24, "disk": 20,
     },
     "multiview": {
         "name": "Lepszy tył obiektu",
@@ -109,6 +111,6 @@ def features() -> dict:
             "description": tr(f["description"]),
             "available": not reasons,
             "reasons": reasons,
-            "installed": (paths.MODELS / "features" / key / "installed.json").is_file(),
+            "installed": (paths.FEATURE_MODELS / key / "installed.json").is_file(),
         }
     return out

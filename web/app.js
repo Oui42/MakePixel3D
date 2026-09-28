@@ -732,7 +732,7 @@ function setStage(stage) {
 /** Na czas usuwania tła / generowania blokujemy wszystko, co mogłoby podmienić zdjęcie lub model. */
 function setBusy(on) {
   document.body.classList.toggle('busy', on);
-  for (const id of ['file', 'glbFile', 'welcomePhoto', 'welcomeGlb', 'quality', 'removeBg', 'btnMask']) $(id).disabled = on;
+  for (const id of ['file', 'glbFile', 'welcomePhoto', 'welcomeGlb', 'welcomeText', 'quality', 'removeBg', 'btnMask', 'btnT2I', 't2iPrompt']) $(id).disabled = on;
   $('btnGenerate').disabled = on || !state.cutoutBlob;
 }
 
@@ -1476,7 +1476,8 @@ async function openAbout() {
       tr.append(Object.assign(document.createElement('td'), { textContent: k }), Object.assign(document.createElement('td'), { textContent: v }));
       return tr;
     }));
-    $('aboutFeatures').replaceChildren(...Object.values(features).map((f) => {
+    await checkT2I();   // stan instalacji funkcji S8 (przycisk „Zainstaluj” / postęp)
+    $('aboutFeatures').replaceChildren(...Object.entries(features).map(([key, f]) => {
       const box = document.createElement('div');
       box.className = 'feature';
       const title = document.createElement('b');
@@ -1493,6 +1494,7 @@ async function openAbout() {
         ul.append(...f.reasons.map((r) => Object.assign(document.createElement('li'), { textContent: r })));
         box.append(ul);
       }
+      box.append(...featureInstallControls(key, f));
       return box;
     }));
   } catch (e) {
@@ -1545,6 +1547,95 @@ $('modelsAction').addEventListener('click', async () => {
     }
   }, 1500);
 });
+
+// ---------- S8: tekst → obraz (funkcja zaawansowana; widoczna, gdy zainstalowana) ----------
+let t2iInfo = null;
+
+function renderT2I() {
+  const on = !!t2iInfo?.installed;
+  $('t2iBlock').hidden = !on;
+  $('welcomeText').hidden = !on;
+}
+
+async function checkT2I() {
+  try { t2iInfo = await (await fetch('/api/text2image')).json(); renderT2I(); } catch { /* serwer niedostępny */ }
+  return t2iInfo;
+}
+
+$('welcomeText').addEventListener('click', () => { setTab('source'); $('t2iPrompt').focus(); });
+
+/** Opis → obraz (serwer) → dalej jak zwykłe zdjęcie: usunięcie tła, model 3D. */
+async function generateFromText() {
+  const prompt = $('t2iPrompt').value.trim();
+  if (!prompt) { setStatus('t2iStatus', t('Wpisz, co ma przedstawiać obraz.'), 'err'); return; }
+  if (document.body.classList.contains('busy') || !confirmDiscard()) return;
+  setBusy(true);
+  setStatus('t2iStatus', t('Generowanie obrazu (AI)… Za pierwszym razem wczytanie modelu trwa około minuty.'), 'busy');
+  try {
+    const seed = $('t2iSeed').value;
+    const res = await fetch('/api/text2image', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, seed: seed === '' ? null : Number(seed) }),
+    });
+    if (!res.ok) {
+      let msg = `${res.status} ${res.statusText}`;
+      try { msg = (await res.json()).detail ?? msg; } catch { /* bez JSON */ }
+      throw new Error(msg);
+    }
+    const blob = await res.blob();
+    setStatus('t2iStatus', t('Obraz gotowy – usuwanie tła…'), 'busy');
+    setBusy(false);
+    await handleFile(new File([blob], `${safeName(prompt.slice(0, 40))}.png`, { type: 'image/png' }));
+    setStatus('t2iStatus', '');
+  } catch (e) {
+    setStatus('t2iStatus', e.message, 'err');
+  } finally {
+    setBusy(false);
+  }
+}
+
+$('btnT2I').addEventListener('click', generateFromText);
+$('t2iPrompt').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) generateFromText(); });
+checkT2I();   // czy funkcja jest zainstalowana → przyciski w Źródle i na ekranie startowym
+
+/** Przycisk „Zainstaluj” w oknie „Sprzęt i zaawansowane AI” + pasek postępu pobierania. */
+function featureInstallControls(key, feature) {
+  if (key !== 'text2image' || !feature.available) return [];
+  const wrap = document.createElement('div');
+  wrap.className = 'feat-install';
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  const prog = document.createElement('span');
+  prog.className = 'muted';
+  const paint = (info) => {
+    if (info?.installed) { btn.hidden = true; prog.textContent = t('zainstalowane'); return; }
+    if (info?.installing) {
+      btn.hidden = true;
+      prog.textContent = t('Pobieranie {pct}% – {what}', { pct: Math.round((info.progress ?? 0) * 100), what: info.current ?? '' });
+      return;
+    }
+    btn.hidden = false;
+    btn.textContent = t('Zainstaluj (ok. {gb} GB, jednorazowo)', { gb: Math.round((info?.sizeMb ?? 11000) / 1000) });
+    prog.textContent = info?.error ?? '';
+  };
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    try {
+      paint(await (await fetch('/api/text2image/install', { method: 'POST' })).json());
+      const tick = setInterval(async () => {
+        const info = await checkT2I();
+        paint(info);
+        if (info && !info.installing) {
+          clearInterval(tick);
+          if (info.installed) toast(t('Funkcja „Tekst → obraz” jest gotowa. Na ekranie startowym pojawił się przycisk „Opisz słowami”.'));
+        }
+      }, 1500);
+    } catch (e) { prog.textContent = e.message; btn.disabled = false; }
+  });
+  paint(t2iInfo ?? { installed: feature.installed });
+  wrap.append(btn, prog);
+  return [wrap];
+}
 
 // ---------- Motyw jasny / ciemny ----------
 // Dopóki użytkownik nie kliknie, motyw idzie za ustawieniem Windows; kliknięcie zapisuje wybór na stałe.

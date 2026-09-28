@@ -16,3 +16,4 @@ CLAUDE.md
 INSTRUKCJA.md
 .claude/
 *.local.md
+cache/

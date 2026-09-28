@@ -2,6 +2,23 @@
 // Klucz = polski tekst źródłowy (z HTML albo z t('…') w kodzie), spacje znormalizowane do pojedynczych.
 // Parametry w klamrach, np. {name}, muszą być takie same w kluczu i w tłumaczeniu.
 export const EN = {
+  // ---------- S8: tekst → obraz ----------
+  'Opisz słowami': 'Describe in words',
+  'Funkcja AI: obraz z opisu słownego': 'AI feature: image from a text description',
+  'Opisz słowami – AI stworzy obraz': 'Describe in words – the AI creates the image',
+  'np. medieval knight in plate armor, full body': 'e.g. medieval knight in plate armor, full body',
+  'Najlepsze wyniki daje opis po angielsku': 'English descriptions give the best results',
+  'Ziarno': 'Seed',
+  'losowe': 'random',
+  'To samo ziarno = ten sam obraz dla tego samego opisu': 'Same seed = same image for the same description',
+  'Wygeneruj obraz z opisu': 'Generate image from description',
+  'Wpisz, co ma przedstawiać obraz.': 'Type what the image should show.',
+  'Generowanie obrazu (AI)… Za pierwszym razem wczytanie modelu trwa około minuty.': 'Generating the image (AI)… The first time, loading the model takes about a minute.',
+  'Obraz gotowy – usuwanie tła…': 'Image ready – removing the background…',
+  'zainstalowane': 'installed',
+  'Pobieranie {pct}% – {what}': 'Downloading {pct}% – {what}',
+  'Zainstaluj (ok. {gb} GB, jednorazowo)': 'Install (about {gb} GB, once)',
+  'Funkcja „Tekst → obraz” jest gotowa. Na ekranie startowym pojawił się przycisk „Opisz słowami”.': 'The "Text → image" feature is ready. A "Describe in words" button has appeared on the start screen.',
   // ---------- nagłówek, zakładki, ogólne ----------
   'Modele zapisane na tym komputerze': 'Models saved on this computer',
   'Galeria': 'Gallery',

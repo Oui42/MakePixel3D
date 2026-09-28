@@ -37,6 +37,7 @@ import capabilities  # noqa: E402
 import library  # noqa: E402
 import reconstruct  # noqa: E402
 import settings  # noqa: E402
+import text2image  # noqa: E402
 import updater  # noqa: E402
 from i18n import tr  # noqa: E402
 
@@ -188,6 +189,38 @@ async def api_export(file: UploadFile = File(...), name: str = Form(...)):
         n += 1
     target.write_bytes(await file.read())
     return {"path": str(target), "name": target.name}
+
+
+# ---------- S8: tekst → obraz (funkcja zaawansowana, instalowana na żądanie) ----------
+@app.get("/api/text2image")
+def api_text2image_status():
+    feat = capabilities.features()["text2image"]
+    return {**text2image.summary(), "available": feat["available"], "reasons": feat["reasons"]}
+
+
+@app.post("/api/text2image/install")
+def api_text2image_install():
+    feat = capabilities.features()["text2image"]
+    if not feat["available"]:
+        raise HTTPException(409, tr("Ten komputer nie spełnia wymagań: {why}", why="; ".join(feat["reasons"])))
+    text2image.install_in_background()
+    return {**text2image.summary(), "available": True, "reasons": []}
+
+
+@app.post("/api/text2image")
+async def api_text2image(request: Request):
+    """Opis słowny → obraz PNG (RGB). Dalej przeglądarka wysyła go jak zdjęcie do /api/cutout."""
+    data = await request.json()
+    prompt = str(data.get("prompt", ""))
+    seed = data.get("seed")
+    try:
+        image = await anyio.to_thread.run_sync(
+            text2image.generate, prompt, int(seed) if seed not in (None, "") else None, int(data.get("size") or 1024))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(500, tr("Błąd generowania obrazu: {exc}", exc=exc))
+    return _png(image)
 
 
 @app.get("/api/capabilities")
