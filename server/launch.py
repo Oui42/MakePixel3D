@@ -19,6 +19,12 @@ sys.path.insert(0, str(ROOT))
 os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
 os.environ.setdefault("PYTHONIOENCODING", "utf-8")
 
+# Proces administratora (--apply-update) widzi Program Files jako ZAPISYWALNY, więc paths.py wziąłby folder programu
+# za folder danych i nie znalazłby pobranej aktualizacji (leży w %LOCALAPPDATA%\MakePixel3D\updates) – dlatego
+# proces zwykłego użytkownika przekazuje mu swój folder danych w --data (zgłoszony błąd: „Restart and install” w kółko).
+if "--data" in sys.argv:
+    os.environ["MAKEPIXEL3D_DATA"] = sys.argv[sys.argv.index("--data") + 1]
+
 import paths  # noqa: E402 – dane użytkownika (logi, aktualizacje) mogą leżeć poza folderem programu
 
 APP_NAME = "MakePixel3D"
@@ -68,7 +74,7 @@ def _apply_update_elevated() -> bool:
     info.fMask = 0x00000040          # SEE_MASK_NOCLOSEPROCESS
     info.lpVerb = "runas"
     info.lpFile = sys.executable
-    info.lpParameters = f'"{ROOT / "launch.py"}" --apply-update'
+    info.lpParameters = f'"{ROOT / "launch.py"}" --apply-update --data "{paths.DATA}"'
     info.lpDirectory = str(PROJECT)
     info.nShow = 0                   # SW_HIDE
     if not ctypes.windll.shell32.ShellExecuteExW(ctypes.byref(info)) or not info.hProcess:
