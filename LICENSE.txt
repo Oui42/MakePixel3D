@@ -1,0 +1,53 @@
+MakePixel3D – Terms of Use and License
+
+Copyright (c) 2026 Oui42 (https://github.com/Oui42/MakePixel3D)
+
+
+1. WHAT THE PROGRAM DOES
+
+MakePixel3D turns a photo into a 3D model using artificial intelligence and renders it as pixel art. All processing takes place on your computer. The program does not send your photos or your work anywhere. An internet connection is used only to install components and to check for updates.
+
+
+2. LICENSE (MIT)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+
+3. ARTIFICIAL INTELLIGENCE
+
+The 3D model and the pixel art are generated automatically. The back and hidden parts of an object are guessed by the AI and may be inaccurate. You are responsible for checking the results before using them and for making sure you have the right to use the photos you process.
+
+
+4. THIRD-PARTY COMPONENTS
+
+The installer downloads and installs the following components. They are licensed by their authors under their own terms and are not covered by this license:
+
+- Python (Python Software Foundation License), https://www.python.org
+- PyTorch (BSD-3-Clause), https://pytorch.org
+- TripoSR – 3D model (MIT, Stability AI and VAST), https://github.com/VAST-AI-Research/TripoSR
+- rembg and IS-Net – background removal (MIT / Apache 2.0), https://github.com/danielgatis/rembg
+- Hugging Face libraries, FastAPI, Pillow, NumPy, scikit-image, trimesh and other Python packages listed in requirements.txt (open-source licenses)
+- Three.js and gifenc (MIT), bundled with the program
+- Microsoft Edge WebView2 Runtime (Microsoft license terms), https://developer.microsoft.com/microsoft-edge/webview2
+
+
+5. INSTALLATION AND DATA
+
+The installer downloads about 4 GB from python.org, pypi.org, download.pytorch.org, github.com and huggingface.co. Your gallery, settings and logs are stored on your computer: next to the program when that folder is writable, otherwise in %LOCALAPPDATA%\MakePixel3D. Uninstalling the program keeps your gallery and settings.
+
+
+6. UPDATES
+
+The program checks for new versions on GitHub at startup (this can be turned off in the settings) and installs them only when you confirm.
+
+
+7. DONATIONS
+
+The program is free. If you want to support its development, you can do so voluntarily at https://buymeacoffee.com/oui42. A donation does not create any obligation on either side.
+
+
+By installing or using MakePixel3D you accept these terms.

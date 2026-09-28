@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MakePixel3D</title>
+  <link rel="icon" href="favicon.png">
+  <link rel="stylesheet" href="style.css">
+  <script>document.documentElement.classList.add('i18n-pending');</script>
+  <script>
+    // motyw ustawiamy przed narysowaniem strony (bez „mignięcia” złego koloru)
+    try { const t = localStorage.getItem('pixelforge.theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}
+  </script>
+  <script type="importmap">
+    { "imports": {
+      "three": "./vendor/three/three.module.js",
+      "three/addons/": "./vendor/three/addons/",
+      "gifenc": "./vendor/gifenc.esm.js"
+    } }
+  </script>
+</head>
+<body data-stage="empty">
+<header>
+  <h1><img src="favicon.png" alt="" width="22" height="22" class="logo">MakePixel3D</h1>
+  <div class="header-tools">
+    <button id="btnGallery" class="header-btn" type="button" title="Modele zapisane na tym komputerze">
+      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><g fill="currentColor">
+        <rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/>
+        <rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></g></svg>
+      Galeria
+    </button>
+    <button id="themeToggle" class="icon-btn" type="button" aria-label="Przełącz motyw">
+      <!-- księżyc: widoczny w motywie jasnym (klik → ciemny) -->
+      <svg class="icon-moon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+        <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" fill="currentColor"/>
+      </svg>
+      <!-- słońce: widoczne w motywie ciemnym (klik → jasny) -->
+      <svg class="icon-sun" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+        <circle cx="12" cy="12" r="4.5" fill="currentColor"/>
+        <g stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/>
+        </g>
+      </svg>
+    </button>
+    <button id="btnSettings" class="icon-btn" type="button" aria-label="Ustawienia programu" title="Ustawienia programu">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+  </div>
+</header>
+<div id="bootError" class="boot-error" hidden></div>
+<div id="modelsBar" class="update-bar models-bar" hidden>
+  <span id="modelsText"></span>
+  <button id="modelsAction" type="button" class="primary">Pobierz teraz</button>
+</div>
+<div id="updateBar" class="update-bar" hidden>
+  <span id="updateText"></span>
+  <button id="updateAction" type="button" class="primary"></button>
+  <button id="updateNotes" type="button" class="link">Co nowego</button>
+  <button id="updateLater" type="button" class="icon-btn" aria-label="Później">✕</button>
+</div>
+
+<main>
+  <!-- Układ „studio”: panel z zakładkami | duży podgląd sprite'a | kolumna z modelem 3D i animacją.
+       data-show: od którego etapu element jest widoczny (photo = po wgraniu zdjęcia, model = po wczytaniu modelu 3D).
+       Etap ustawia app.js w <body data-stage="empty|photo|model">; ukrywanie robi CSS.
+       Zakładki panelu: przyciski [data-tab] w #tabs przełączają panele .pane[data-pane] (app.js → setTab). -->
+  <aside id="panel">
+    <nav id="tabs" role="tablist" aria-label="Ustawienia" data-show="photo">
+      <button type="button" role="tab" data-tab="source" data-title="Zdjęcie" aria-label="Zdjęcie" title="Źródło: zdjęcie albo gotowy model"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="m4 18 5-5 3 3 3-3 5 5"/></svg></button>
+      <button type="button" role="tab" data-tab="model" data-title="Model 3D" aria-label="Model 3D" title="Model 3D: generowanie, symetria, woksele"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 20 7.5v9L12 21 4 16.5v-9z"/><path d="M4 7.5 12 12l8-4.5M12 12v9"/></svg></button>
+      <button type="button" role="tab" data-tab="camera" data-title="Kamera" aria-label="Kamera" title="Kamera: kierunki, pochylenie, kadr" data-show="model"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-2.5h6L17 8h3v11H4z"/><circle cx="12" cy="13.5" r="3.5"/></svg></button>
+      <button type="button" role="tab" data-tab="style" data-title="Styl" aria-label="Styl" title="Styl: rozmiar, paleta, kontur, cień"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4.5 19.5 9.5 11 18l-5-5z"/><path d="M6 13c-2 0-3 1.5-3 3.5V20h3.5c2 0 3.5-1 3.5-3"/></svg></button>
+      <button type="button" role="tab" data-tab="colors" data-title="Kolory" aria-label="Kolory" title="Kolory: nasycenie, kontrast, jasność"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.2 0 2-.8 2-1.8 0-1-.8-1.4-.8-2.4 0-1 .8-1.8 1.8-1.8H17a4 4 0 0 0 4-4C21 6.5 17 3 12 3z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7.5" r="1"/></svg></button>
+      <button type="button" role="tab" data-tab="save" data-title="Zapis" aria-label="Zapis" title="Zapis: galeria, PNG, arkusz, GIF"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/></svg></button>
+    </nav>
+    <div id="paneTitle" class="pane-title" data-show="photo"></div>
+
+    <div class="panes">
+      <!-- ================= Źródło: zdjęcie + model 3D ================= -->
+      <div class="pane" data-pane="source" role="tabpanel">
+        <section>
+          <label id="drop" class="drop">
+            <input id="file" type="file" accept="image/*" hidden>
+            <img id="cutoutThumb" alt="" hidden>
+            <span id="dropText">Upuść zdjęcie tutaj albo kliknij, żeby wybrać</span>
+          </label>
+          <label class="check"><input id="removeBg" type="checkbox" checked> Usuń tło automatycznie</label>
+          <p id="cutoutStatus" class="status"></p>
+          <button id="btnMask" class="block" type="button" hidden title="Pędzlem przywróć fragment obiektu albo usuń resztki tła">Popraw tło ręcznie</button>
+          <div class="or"><span>albo</span></div>
+          <label class="btn block" id="glbLabel">Wczytaj gotowy model 3D (.glb)<input id="glbFile" type="file" accept=".glb,.gltf" hidden></label>
+        </section>
+      </div>
+
+      <!-- ================= Model: generowanie, symetria, woksele ================= -->
+      <div class="pane" data-pane="model" role="tabpanel" hidden>
+        <section data-show="photo">
+          <div id="genBlock">
+            <p class="tip" data-show="photo-only">Model 3D pozwala obejrzeć obiekt z każdej strony. Bez niego możesz zapisać tylko płaski pixel-art 2D.</p>
+            <div class="row">
+              <label for="quality">Jakość siatki</label>
+              <select id="quality" data-seg>
+                <option value="128" data-label="Szybka" title="Siatka 128³ – najszybciej">Szybka (128)</option>
+                <option value="192" data-label="Standard" title="Siatka 192³" selected>Standard (192)</option>
+                <option value="256" data-label="Wysoka" title="Siatka 256³ – najdokładniej, najdłużej">Wysoka (256)</option>
+              </select>
+            </div>
+            <button id="btnGenerate" class="primary" disabled>Generuj model 3D</button>
+            <p id="genStatus" class="status"></p>
+          </div>
+          <div data-show="model">
+            <div class="row">
+              <label for="symmetry" title="Wyrównuje boki i tył, które AI zgaduje. Dobre dla postaci, aut, mebli.">Symetria</label>
+              <select id="symmetry" data-seg>
+                <option value="off" data-label="Wyłączona" selected>wyłączona</option>
+                <option value="left" data-label="Lewa" title="Lewa połowa modelu (na zdjęciu) odbita na prawą">wzór: lewa połowa</option>
+                <option value="right" data-label="Prawa" title="Prawa połowa modelu (na zdjęciu) odbita na lewą">wzór: prawa połowa</option>
+              </select>
+            </div>
+            <div class="row">
+              <label for="voxelMode" title="Zamienia model na sześcienne klocki (jak w Minecrafcie) – wyraźny, „pikselowy” wygląd z każdej strony.">Bryła</label>
+              <select id="voxelMode" data-seg>
+                <option value="off" data-label="Gładka" selected>gładka</option>
+                <option value="on" data-label="Woksele" title="Model z klocków">woksele</option>
+              </select>
+            </div>
+            <div class="row slider" id="voxelResRow">
+              <label for="voxelRes" title="Ile klocków mieści się na najdłuższym boku modelu. Najładniej, gdy to mniej więcej szerokość sprite'a.">Liczba wokseli <output id="voxelResOut"></output></label>
+              <input id="voxelRes" type="range" min="8" max="96" step="4" value="32">
+            </div>
+            <button id="btnSaveGlb" class="block" disabled>Zapisz model (.glb)</button>
+          </div>
+        </section>
+      </div>
+
+      <!-- ================= Kamera ================= -->
+      <div class="pane" data-pane="camera" role="tabpanel" hidden>
+        <section id="secCamera" data-show="model">
+          <div class="row">
+            <label for="dirCount">Liczba kierunków</label>
+            <select id="dirCount" data-seg>
+              <option value="4" data-label="4" data-sub="co 90°">4 (co 90°)</option>
+              <option value="8" data-label="8" data-sub="co 45°" selected>8 (co 45°)</option>
+              <option value="16" data-label="16" data-sub="co 22,5°">16 (co 22,5°)</option>
+            </select>
+          </div>
+          <div class="row slider">
+            <label for="pitch">Pochylenie <output id="pitchOut"></output></label>
+            <input id="pitch" type="range" min="0" max="90" step="5" value="30">
+          </div>
+          <div class="presets seg" data-target="pitch">
+            <button data-v="0">0° bok</button><button data-v="30">30° izo</button><button data-v="45">45°</button><button data-v="90">90° góra</button>
+          </div>
+          <div class="row">
+            <label for="anchor" title="„Stopy na dole”: podłoże zawsze w tym samym wierszu – postać nie skacze przy zmianie kierunku.">Kadrowanie</label>
+            <select id="anchor" data-seg>
+              <option value="center" data-label="Wyśrodkowane">wyśrodkowane</option>
+              <option value="ground" data-label="Stopy na dole" selected>stopy na dole</option>
+            </select>
+          </div>
+          <div class="row slider">
+            <label for="zoom">Powiększenie <output id="zoomOut"></output></label>
+            <input id="zoom" type="range" min="50" max="200" step="5" value="100">
+          </div>
+          <h3>Korekta ustawienia modelu</h3>
+          <div class="row slider">
+            <label for="baseYaw">Obrót (przód) <output id="baseYawOut"></output></label>
+            <input id="baseYaw" type="range" min="-180" max="180" step="5" value="0">
+          </div>
+          <div class="btns">
+            <button id="btnTiltX">Przewróć ↻ X</button>
+            <button id="btnTiltZ">Przewróć ↻ Z</button>
+            <button id="btnResetTilt">Reset</button>
+          </div>
+        </section>
+      </div>
+
+      <!-- ================= Styl: preset + kształt pixel-artu ================= -->
+      <div class="pane" data-pane="style" role="tabpanel" hidden>
+        <section data-show="photo">
+          <div class="row">
+            <select id="preset" class="grow">
+              <option value="">— wybierz gotowy styl —</option>
+            </select>
+          </div>
+          <button id="btnDefaults" class="link">Przywróć ustawienia domyślne</button>
+          <div class="row">
+            <label for="size">Szerokość sprite'a</label>
+            <select id="size">
+              <option>16</option><option>24</option><option>32</option><option>48</option>
+              <option selected>64</option><option>96</option><option>128</option><option>192</option><option>256</option>
+            </select>
+          </div>
+          <div class="row">
+            <label for="aspect" title="Szerokość : wysokość sprite'a">Proporcje</label>
+            <select id="aspect">
+              <option value="1" selected>1 : 1 kwadrat</option>
+              <option value="1.5">2 : 3 postać</option>
+              <option value="2">1 : 2 wysoka postać</option>
+              <option value="0.75">4 : 3 szeroki</option>
+              <option value="0.5">2 : 1 bardzo szeroki</option>
+            </select>
+          </div>
+          <div class="row">
+            <label for="sampling" title="Ostre detale: każdy piksel bierze najczęstszy kolor ze swojego obszaru – wyraźniejsze oczy, krawędzie, napisy.">Zmniejszanie</label>
+            <select id="sampling" data-seg>
+              <option value="sharp" data-label="Ostre detale" title="Najczęstszy kolor w obszarze piksela – wyraźne oczy, krawędzie, napisy" selected>ostre detale</option>
+              <option value="avg" data-label="Gładkie" title="Średnia kolorów – łagodniejsze przejścia">gładkie (średnia)</option>
+            </select>
+          </div>
+          <div class="row">
+            <label for="paletteMode">Paleta</label>
+            <select id="paletteMode">
+              <option value="auto" selected>automatyczna (z obrazu)</option>
+              <option value="custom">własna z pliku…</option>
+            </select>
+          </div>
+          <div class="row" id="customPaletteRow" hidden>
+            <label class="btn grow">Wczytaj paletę (.hex, .gpl, .png)<input id="paletteFile" type="file" accept=".hex,.gpl,.txt,.png,.gif" hidden></label>
+          </div>
+          <p id="paletteInfo" class="status"></p>
+          <div class="row slider" id="colorsRow">
+            <label for="colors">Liczba kolorów <output id="colorsOut"></output></label>
+            <input id="colors" type="range" min="0" max="64" step="1" value="24">
+          </div>
+          <div class="row slider">
+            <label for="dither" title="Wzór z kropek udający kolory pośrednie – działa, gdy kolorów jest mało.">Dithering <output id="ditherOut"></output></label>
+            <input id="dither" type="range" min="0" max="100" step="5" value="0">
+          </div>
+          <div class="row">
+            <label for="outline">Kontur</label>
+            <select id="outline" data-seg>
+              <option value="none" data-label="Brak">brak</option>
+              <option value="auto" data-label="Ciemny" title="Przyciemniony kolor sąsiedniego piksela" selected>przyciemniony</option>
+              <option value="color" data-label="Kolor" title="Jednolity kolor – wybierz go poniżej">jednolity kolor</option>
+            </select>
+          </div>
+          <div class="row" id="outlineColorRow">
+            <label for="outlineColor">Kolor konturu</label>
+            <input id="outlineColor" type="color" value="#1b1026" title="Kolor konturu">
+          </div>
+          <div class="row slider" data-show="model">
+            <label for="shadowOpacity" title="Płaska plama pod podstawą obiektu – przydatna w grach. 0% = bez cienia, 100% = cień pełny, pomiędzy – półprzezroczysty (w GIF zawsze pełny).">Cień pod obiektem <output id="shadowOpacityOut"></output></label>
+            <input id="shadowOpacity" type="range" min="0" max="100" step="5" value="0">
+          </div>
+          <div class="row" id="shadowColorModeRow" data-show="model">
+            <label for="shadowColorMode">Kolor cienia</label>
+            <select id="shadowColorMode" data-seg>
+              <option value="palette" data-label="Z palety" title="Najciemniejszy kolor palety sprite'a – cień pasuje do reszty kolorów">z palety</option>
+              <option value="black" data-label="Czarny" title="Czysty czarny" selected>czarny</option>
+              <option value="custom" data-label="Własny" title="Dowolny kolor – wybierz go poniżej">własny</option>
+            </select>
+          </div>
+          <div class="row" id="shadowColorRow" data-show="model">
+            <label for="shadowColor">Własny kolor cienia</label>
+            <input id="shadowColor" type="color" value="#2a1f3d" title="Kolor cienia">
+          </div>
+        </section>
+      </div>
+
+      <!-- ================= Kolory ================= -->
+      <div class="pane" data-pane="colors" role="tabpanel" hidden>
+        <section data-show="photo">
+          <div class="row slider">
+            <label for="saturation">Nasycenie <output id="saturationOut"></output></label>
+            <input id="saturation" type="range" min="0" max="200" step="5" value="120">
+          </div>
+          <div class="row slider">
+            <label for="contrast">Kontrast <output id="contrastOut"></output></label>
+            <input id="contrast" type="range" min="50" max="200" step="5" value="110">
+          </div>
+          <div class="row slider">
+            <label for="brightness">Jasność <output id="brightnessOut"></output></label>
+            <input id="brightness" type="range" min="-80" max="80" step="5" value="0">
+          </div>
+          <div class="row slider">
+            <label for="threshold" title="Jak bardzo piksel na krawędzi musi być zakryty przez obiekt, żeby został narysowany.">Próg krawędzi <output id="thresholdOut"></output></label>
+            <input id="threshold" type="range" min="5" max="95" step="5" value="50">
+          </div>
+          <div class="row" data-show="model">
+            <label for="lighting">Oświetlenie</label>
+            <select id="lighting" data-seg>
+              <option value="flat" data-label="Ze zdjęcia" title="Kolory i światło takie jak na zdjęciu (płaskie)" selected>ze zdjęcia (płaskie)</option>
+              <option value="lit" data-label="Cieniowanie" title="Dodatkowe światło z lewej-góry – wyraźniejsza bryła">dodatkowe cieniowanie</option>
+            </select>
+          </div>
+          <label class="check" data-show="model"><input id="matchPhoto" type="checkbox" checked> Dopasuj kolory modelu do zdjęcia</label>
+          <label class="check"><input id="removeOrphans" type="checkbox" checked> Usuń pojedyncze piksele</label>
+        </section>
+      </div>
+
+      <!-- ================= Zapis ================= -->
+      <div class="pane" data-pane="save" role="tabpanel" hidden>
+        <section data-show="photo">
+          <div data-show="model">
+            <button id="btnSaveGallery" class="primary" type="button"
+              title="Zapisuje ustawienia, obrót modelu, poprawki pikseli i tła – po otwarciu z galerii wszystko wraca (Ctrl+S)">Zapisz w galerii</button>
+            <p id="saveStatus" class="status"></p>
+            <h3>Pliki PNG bez tła</h3>
+          </div>
+          <div class="row">
+            <label for="exportScale">Skala zapisu</label>
+            <select id="exportScale" data-seg>
+              <option value="1" data-label="×1" title="Oryginalny rozmiar" selected>×1 (oryginał)</option><option value="2">×2</option>
+              <option value="4">×4</option><option value="8">×8</option>
+            </select>
+          </div>
+          <button id="btnExportOne" class="primary" disabled>Zapisz ten widok</button>
+          <div data-show="model">
+            <div class="btns">
+              <button id="btnExportSheet" disabled>Arkusz wszystkich kierunków</button>
+              <button id="btnExportAll" disabled>Każdy kierunek osobno</button>
+            </div>
+            <h3>Animacja obrotu (GIF)</h3>
+            <div class="row">
+              <label for="animFrames" title="„Jak kierunki” – animacja pokazuje dokładnie te widoki, które trafią do arkusza (liczba kierunków z zakładki Kamera).">Klatki</label>
+              <select id="animFrames" data-seg>
+                <option value="dirs" data-label="Jak kierunki" selected>jak kierunki</option>
+                <option value="16">16</option>
+                <option value="24">24</option>
+                <option value="36">36</option>
+              </select>
+            </div>
+            <div class="row">
+              <label for="gifDuration">Pełny obrót w</label>
+              <select id="gifDuration" data-seg>
+                <option value="1">1 s</option><option value="2">2 s</option><option value="3" selected>3 s</option>
+                <option value="4">4 s</option><option value="6">6 s</option>
+              </select>
+            </div>
+            <button id="btnExportGif" disabled>Zapisz animację GIF</button>
+            <p id="gifStatus" class="status"></p>
+          </div>
+        </section>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ================= Środek: duży podgląd sprite'a ================= -->
+  <section id="stage">
+    <div class="card welcome" data-show="empty">
+      <h2>Zamień zdjęcie w pixel-art, który można obracać</h2>
+      <ol class="steps">
+        <li><b>Wgraj zdjęcie</b> jednego obiektu – tło usunie się samo.</li>
+        <li><b>Wygeneruj model 3D</b> – sztuczna inteligencja odtworzy bryłę.</li>
+        <li><b>Ustaw styl i kamerę</b> – rozmiar, paleta, kierunki, pochylenie.</li>
+        <li><b>Zapisz</b> – PNG bez tła, arkusz kierunków albo animację GIF.</li>
+      </ol>
+      <div class="welcome-actions">
+        <button id="welcomePhoto" class="primary">Wybierz zdjęcie</button>
+        <button id="welcomeGlb">Wczytaj model 3D (.glb)</button>
+      </div>
+      <p class="muted">Możesz też przeciągnąć plik w dowolne miejsce okna.</p>
+      <div id="recentBox" hidden>
+        <h3>Ostatnie prace</h3>
+        <div id="recent" class="tiles compact"></div>
+        <button id="btnAllGallery" class="link" type="button">Pokaż całą galerię</button>
+      </div>
+    </div>
+
+    <figure class="card sprite-card" data-show="photo">
+      <figcaption>Pixel-art <span id="spriteInfo" class="muted"></span>
+        <button id="btnEdit" class="mini" type="button" title="Popraw ręcznie pojedyncze piksele">✎ Edytuj piksele</button>
+      </figcaption>
+      <div id="editBar" class="editbar" hidden>
+        <div class="seg" id="editTools" role="radiogroup" aria-label="Narzędzie">
+          <button type="button" data-tool="pencil" title="Ołówek (B)">Ołówek</button>
+          <button type="button" data-tool="eraser" title="Gumka (E) – piksel staje się przezroczysty">Gumka</button>
+          <button type="button" data-tool="picker" title="Pipeta (I) – pobierz kolor z obrazka">Pipeta</button>
+        </div>
+        <input id="editColor" type="color" value="#1b1026" title="Kolor ołówka">
+        <button id="editUndo" type="button" title="Cofnij (Ctrl+Z)" aria-label="Cofnij">↶</button>
+        <button id="editRedo" type="button" title="Ponów (Ctrl+Y)" aria-label="Ponów">↷</button>
+        <button id="editClear" type="button" title="Usuń wszystkie poprawki tego kierunku">Wyczyść</button>
+        <span id="editHint" class="muted small" hidden>kolor z palety: kliknij go niżej</span>
+      </div>
+      <div class="checker" id="spriteBox"><canvas id="spriteView"></canvas><canvas id="spriteOverlay"></canvas></div>
+      <div class="dock">
+        <div class="dock-row" data-show="model">
+          <span class="dock-label" title="Kliknij kierunek albo użyj strzałek ← →">Kierunki</span>
+          <div id="strip"></div>
+        </div>
+        <div class="dock-row">
+          <span class="dock-label">Paleta <span id="paletteCount" class="muted"></span></span>
+          <div id="palette"></div>
+        </div>
+      </div>
+    </figure>
+  </section>
+
+  <!-- ================= Prawa kolumna: model 3D + animacja ================= -->
+  <aside id="side" data-show="model">
+    <figure class="card">
+      <figcaption>Model 3D <span class="muted">(przeciągnij)</span></figcaption>
+      <div id="viewer"></div>
+    </figure>
+    <figure class="card">
+      <figcaption>Animacja <span id="animInfo" class="muted"></span>
+        <button id="btnPause" class="mini" disabled title="Pauza / wznów (spacja)">❚❚</button>
+      </figcaption>
+      <div class="checker" id="animBox"><canvas id="animView"></canvas>
+        <p id="animHint" class="hint">Przygotowuję animację…</p>
+      </div>
+    </figure>
+  </aside>
+</main>
+<dialog id="settingsDialog" class="dlg about settings">
+  <div class="dlg-head">
+    <h2>Ustawienia programu</h2>
+    <button id="settingsClose" class="icon-btn" type="button" aria-label="Zamknij">✕</button>
+  </div>
+  <div id="settingsBody">
+    <section class="set-group">
+      <h3>Język</h3>
+      <select id="setLanguage" data-seg>
+        <option value="en" data-label="English">English</option>
+        <option value="pl" data-label="Polski">Polski</option>
+      </select>
+    </section>
+    <section class="set-group">
+      <h3>Folder zapisu plików</h3>
+      <p class="tip">Tu trafiają zapisane obrazy PNG, arkusze, animacje GIF i modele .glb.</p>
+      <div class="path-row">
+        <div class="path-box" id="setExportBox">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linejoin="round" aria-hidden="true"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2.5h8.5A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"/></svg>
+          <span id="setExportPath"></span>
+        </div>
+        <button id="setExportPick" type="button">Zmień folder…</button>
+        <button id="setExportOpen" type="button">Otwórz folder</button>
+      </div>
+      <p id="setExportStatus" class="status"></p>
+    </section>
+    <section class="set-group">
+      <h3>Aktualizacje</h3>
+      <p id="aboutUpdate" class="status"></p>
+      <div class="btns">
+        <button id="aboutCheck" type="button">Sprawdź teraz</button>
+        <button id="aboutUpdateAction" type="button" class="primary" hidden></button>
+      </div>
+      <label class="check"><input id="setCheckUpdates" type="checkbox"> Sprawdzaj aktualizacje przy uruchomieniu</label>
+    </section>
+  </div>
+  <div class="set-foot">
+    <span id="device">…</span>
+    <button id="btnAbout" type="button" class="link">Sprzęt i zaawansowane AI</button>
+  </div>
+</dialog>
+
+<dialog id="aboutDialog" class="dlg about">
+  <div class="dlg-head">
+    <h2>MakePixel3D <span id="aboutVersion" class="muted"></span></h2>
+    <button id="aboutClose" class="icon-btn" type="button" aria-label="Zamknij">✕</button>
+  </div>
+  <h3>Ten komputer</h3>
+  <table class="hw" id="aboutHardware"></table>
+  <h3>Zaawansowane AI</h3>
+  <p class="tip">Funkcje wymagające mocnej karty graficznej. Na komputerze, który nie spełnia wymagań, są zablokowane.</p>
+  <div id="aboutFeatures" class="features"></div>
+</dialog>
+
+<div id="toast" class="toast" role="status" hidden></div>
+
+<dialog id="galleryDialog" class="dlg">
+  <div class="dlg-head">
+    <h2>Galeria</h2>
+    <span class="muted">modele zapisane na tym komputerze (folder library)</span>
+    <button id="galleryClose" class="icon-btn" type="button" aria-label="Zamknij">✕</button>
+  </div>
+  <p id="galleryEmpty" class="muted" hidden>Galeria jest pusta. Każdy wygenerowany model zapisze się tu automatycznie.</p>
+  <div id="galleryTiles" class="tiles"></div>
+</dialog>
+
+<dialog id="maskDialog" class="dlg">
+  <div class="dlg-head">
+    <h2>Poprawka tła</h2>
+    <span class="muted">Na czerwono: tło, które zostanie usunięte</span>
+  </div>
+  <div class="mask-tools">
+    <select id="maskTool" data-seg>
+      <option value="restore" data-label="Przywróć obiekt" title="Maluj tam, gdzie AI wycięło kawałek obiektu" selected>przywróć</option>
+      <option value="remove" data-label="Usuń tło" title="Maluj po resztkach tła, które zostały" >usuń</option>
+    </select>
+    <label class="brush">Pędzel <input id="maskBrush" type="range" min="4" max="160" step="2" value="40"> <output id="maskBrushOut"></output></label>
+    <button id="maskUndo" type="button">↶ Cofnij</button>
+    <button id="maskReset" type="button" title="Wróć do maski wyznaczonej przez AI">Od nowa</button>
+  </div>
+  <div class="mask-stage"><canvas id="maskCanvas"></canvas><div id="maskCursor" class="brush-cursor" hidden></div></div>
+  <div class="dlg-foot">
+    <span class="muted">Ctrl+Z cofnij · [ ] rozmiar pędzla · Esc anuluj</span>
+    <button id="maskCancel" type="button">Anuluj</button>
+    <button id="maskApply" class="primary" type="button">Zastosuj</button>
+  </div>
+</dialog>
+
+<script>
+  // Czytelny komunikat, gdy interfejs nie wystartuje (zamiast pustych list)
+  function showBootError(text) {
+    const el = document.getElementById('bootError'); el.textContent = text; el.hidden = false;
+    document.documentElement.classList.remove('i18n-pending');
+  }
+  var bootPl = false;
+  try { bootPl = localStorage.getItem('pixelforge.lang') === 'pl'; } catch (e) {}
+  if (location.protocol === 'file:') {
+    showBootError(bootPl ? 'Tę stronę trzeba otworzyć przez program: uruchom start.bat albo wpisz w przeglądarce http://127.0.0.1:7860'
+      : 'Open this page through the program: run start.bat or go to http://127.0.0.1:7860 in your browser.');
+  } else {
+    setTimeout(() => {
+      if (!window.pixelForgeReady) showBootError(bootPl ? 'Interfejs nie uruchomił się poprawnie. Odśwież stronę skrótem Ctrl+F5 albo uruchom program ponownie.'
+        : 'The interface did not start correctly. Refresh with Ctrl+F5 or restart the program.');
+    }, 10000);
+  }
+</script>
+<script type="module" src="app.js"></script>
+</body>
+</html>

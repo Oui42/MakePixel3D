@@ -1,0 +1,19 @@
+# PyTorch is installed separately by the installer / install.bat (CUDA 12.8 build for RTX 50xx or the CPU build)
+fastapi>=0.110
+uvicorn[standard]>=0.29
+python-multipart>=0.0.9
+pillow>=10
+numpy>=1.26
+rembg[cpu]>=2.0.60
+scikit-image>=0.22
+trimesh>=4.0
+omegaconf>=2.3
+einops>=0.7
+imageio>=2.30
+huggingface_hub>=0.23
+# model downloads must trust the Windows certificate store (antivirus / proxy replacing HTTPS certificates)
+truststore>=0.9
+# TripoSR loads ViT weights with the old layer names - transformers 5.x renamed them
+transformers>=4.40,<5
+# program window (WebView2 is built into Windows 11)
+pywebview>=5.0

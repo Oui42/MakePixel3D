@@ -1,0 +1,18 @@
+.venv/
+__pycache__/
+models/
+server/third_party/
+web/_test/
+library/
+updates/
+dist/
+config/
+!config/update.json.example
+logs/
+MakePixel3D.lnk
+info z claude*.txt
+# working notes (never in the repository or the release package)
+CLAUDE.md
+INSTRUKCJA.md
+.claude/
+*.local.md
