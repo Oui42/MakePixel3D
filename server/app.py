@@ -35,6 +35,7 @@ from PIL import Image, UnidentifiedImageError  # noqa: E402
 import background  # noqa: E402
 import capabilities  # noqa: E402
 import library  # noqa: E402
+import multiview  # noqa: E402
 import reconstruct  # noqa: E402
 import settings  # noqa: E402
 import text2image  # noqa: E402
@@ -72,6 +73,8 @@ def _png(image: Image.Image) -> Response:
 @app.get("/api/status")
 def api_status():
     st = reconstruct.status
+    if multiview.status["generating"]:   # S9: silnik InstantMesh ma własne etapy
+        st = multiview.status
     elapsed = time.time() - st["started"] if st["started"] and st["stage"] != "idle" else 0
     dev, dev_name = reconstruct.device_if_ready()   # None, dopóki PyTorch wczytuje się w tle
     return {
@@ -223,6 +226,22 @@ async def api_text2image(request: Request):
     return _png(image)
 
 
+# ---------- S9: lepszy tył obiektu (silnik InstantMesh, instalowany na żądanie) ----------
+@app.get("/api/multiview")
+def api_multiview_status():
+    feat = capabilities.features()["multiview"]
+    return {**multiview.summary(), "available": feat["available"], "reasons": feat["reasons"]}
+
+
+@app.post("/api/multiview/install")
+def api_multiview_install():
+    feat = capabilities.features()["multiview"]
+    if not feat["available"]:
+        raise HTTPException(409, tr("Ten komputer nie spełnia wymagań: {why}", why="; ".join(feat["reasons"])))
+    multiview.install_in_background()
+    return {**multiview.summary(), "available": True, "reasons": []}
+
+
 @app.get("/api/capabilities")
 def api_capabilities():
     return {"hardware": capabilities.hardware(), "features": capabilities.features()}
@@ -253,6 +272,7 @@ async def api_reconstruct(
     source: UploadFile | None = File(None),        # całe zdjęcie z maską – zapisujemy w galerii
     resolution: int = Form(192),
     name: str = Form(""),
+    engine: str = Form("triposr"),                 # triposr | instantmesh (S9 „lepszy tył obiektu”, gdy zainstalowany)
 ):
     """Obiekt bez tła (PNG) → model 3D (GLB). Wynik trafia też do galerii (nagłówek X-Library-Id)."""
     image = await _read_image(file)
@@ -261,12 +281,22 @@ async def api_reconstruct(
     t0 = time.time()
     try:
         # w wątku roboczym – serwer odpowiada w tym czasie na /api/status
-        glb = await anyio.to_thread.run_sync(reconstruct.generate, image, resolution)
+        if engine == "instantmesh":
+            if not multiview.installed():
+                raise HTTPException(409, tr("Funkcja „Lepszy tył obiektu” nie jest zainstalowana."))
+            glb, _views = await anyio.to_thread.run_sync(multiview.generate, image)
+        else:
+            glb = await anyio.to_thread.run_sync(reconstruct.generate, image, resolution)
+    except HTTPException:
+        raise
     except Exception as exc:  # noqa: BLE001
+        import traceback
+        traceback.print_exc()   # pełny ślad w logu (logs/makepixel3d.log) – użytkownik widzi tylko komunikat
         if not models_setup.all_present():
             raise HTTPException(503, tr("Brakuje modeli AI, a nie udało się ich pobrać (brak internetu?). Pobierz je przyciskiem na pasku u góry okna, gdy będzie połączenie."))
         raise HTTPException(500, tr("Błąd generowania 3D: {exc}", exc=exc))
-    meta = {"quality": resolution, "seconds": round(time.time() - t0, 1), "device": reconstruct.device_name()}
+    meta = {"quality": resolution, "seconds": round(time.time() - t0, 1), "device": reconstruct.device_name(),
+            "engine": engine}
     try:
         entry_id = library.add(name, source_png, image, glb, meta)
     except OSError as exc:  # brak miejsca itp. – model i tak oddajemy, tylko bez zapisu w galerii

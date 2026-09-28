@@ -28,10 +28,10 @@ set PY=.venv\Scripts\python.exe
 
 echo [2/6] Installing PyTorch...
 if /i "%1"=="cpu" (
-  %PY% -m pip install torch --index-url https://download.pytorch.org/whl/cpu || (pause & exit /b 1)
+  %PY% -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu || (pause & exit /b 1)
 ) else (
   rem CUDA 12.8 - required by RTX 50xx cards (Blackwell)
-  %PY% -m pip install torch --index-url https://download.pytorch.org/whl/cu128 || (pause & exit /b 1)
+  %PY% -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128 || (pause & exit /b 1)
 )
 
 echo [3/6] Installing libraries...
@@ -40,6 +40,10 @@ echo [3/6] Installing libraries...
 echo [4/6] Downloading TripoSR (3D model code, MIT license)...
 if not exist server\third_party\TripoSR (
   git clone --depth 1 https://github.com/VAST-AI-Research/TripoSR.git server\third_party\TripoSR || (pause & exit /b 1)
+)
+
+if not exist server\third_party\InstantMesh (
+  git clone --depth 1 https://github.com/TencentARC/InstantMesh.git server\third_party\InstantMesh || (pause & exit /b 1)
 )
 
 echo [5/6] Downloading AI models (about 1.8 GB, once; afterwards the program works offline)...

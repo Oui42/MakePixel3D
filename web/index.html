@@ -116,6 +116,14 @@
                 <option value="256" data-label="Wysoka" title="Siatka 256³ – najdokładniej, najdłużej">Wysoka (256)</option>
               </select>
             </div>
+            <!-- S9: wybór silnika – widoczny, gdy funkcja „Lepszy tył obiektu” jest zainstalowana -->
+            <div class="row" id="engineRow" hidden>
+              <label for="engine" title="Dokładny: AI dorysowuje widoki z innych stron (Zero123++), a siatkę buduje InstantMesh – lepszy tył, ale kilkadziesiąt sekund">Silnik 3D</label>
+              <select id="engine" data-seg>
+                <option value="triposr" data-label="Szybki" title="TripoSR – jedno zdjęcie, kilka sekund" selected>szybki (TripoSR)</option>
+                <option value="instantmesh" data-label="Dokładny" title="Widoki z 6 stron + InstantMesh – wyraźnie lepsze boki i tył, ok. 1 min">dokładny (InstantMesh)</option>
+              </select>
+            </div>
             <button id="btnGenerate" class="primary" disabled>Generuj model 3D</button>
             <p id="genStatus" class="status"></p>
           </div>

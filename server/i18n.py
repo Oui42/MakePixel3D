@@ -66,6 +66,16 @@ EN = {
     "Generowanie obrazu…": "Generating the image…",
     "Ten komputer nie spełnia wymagań: {why}": "This computer does not meet the requirements: {why}",
     "Błąd generowania obrazu: {exc}": "Image generation error: {exc}",
+    # S9: lepszy tył obiektu
+    "brakuje kodu InstantMesh (server/third_party/InstantMesh) – uruchom instalator ponownie":
+        "InstantMesh code is missing (server/third_party/InstantMesh) – run the installer again",
+    "widoki: Zero123++ (5,6 GB)": "views: Zero123++ (5.6 GB)",
+    "siatka: InstantMesh (3,2 GB)": "mesh: InstantMesh (3.2 GB)",
+    "koder obrazu DINO (0,3 GB)": "DINO image encoder (0.3 GB)",
+    "Wczytywanie modeli widoków i siatki…": "Loading the view and mesh models…",
+    "Funkcja „Lepszy tył obiektu” nie jest zainstalowana.": "The \"Better back side\" feature is not installed.",
+    "Dorysowywanie widoków z innych stron (Zero123++)…": "Imagining views from other sides (Zero123++)…",
+    "Budowanie siatki 3D z widoków (InstantMesh)…": "Building the 3D mesh from the views (InstantMesh)…",
     "AI dorysowuje widoki z innych stron, zanim powstanie model 3D – wyraźnie lepsze boki i tył.":
         "AI draws views from other sides before the 3D model is built – much better sides and back.",
     "Szkielet i animacje ruchu": "Skeleton and motion animations",

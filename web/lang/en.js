@@ -2,6 +2,17 @@
 // Klucz = polski tekst źródłowy (z HTML albo z t('…') w kodzie), spacje znormalizowane do pojedynczych.
 // Parametry w klamrach, np. {name}, muszą być takie same w kluczu i w tłumaczeniu.
 export const EN = {
+  // ---------- S9: lepszy tył obiektu ----------
+  'Silnik 3D': '3D engine',
+  'Dokładny: AI dorysowuje widoki z innych stron (Zero123++), a siatkę buduje InstantMesh – lepszy tył, ale kilkadziesiąt sekund': 'Accurate: the AI imagines views from other sides (Zero123++) and InstantMesh builds the mesh – better back side, but takes up to a minute',
+  'Szybki': 'Fast',
+  'TripoSR – jedno zdjęcie, kilka sekund': 'TripoSR – one photo, a few seconds',
+  'szybki (TripoSR)': 'fast (TripoSR)',
+  'Dokładny': 'Accurate',
+  'Widoki z 6 stron + InstantMesh – wyraźnie lepsze boki i tył, ok. 1 min': 'Views from 6 sides + InstantMesh – clearly better sides and back, about 1 min',
+  'dokładny (InstantMesh)': 'accurate (InstantMesh)',
+  'Funkcja „Lepszy tył obiektu” jest gotowa. W zakładce Model pojawił się wybór silnika 3D.': 'The "Better back side" feature is ready. A 3D engine choice has appeared in the Model tab.',
+  'Licencja: wagi modelu Zero123++ są na licencji CC-BY-NC 4.0 (bez użycia w produktach komercyjnych); wygenerowane modele i sprite\'y możesz wykorzystywać dowolnie.': 'License: the Zero123++ model weights are CC-BY-NC 4.0 (no use inside commercial products); the generated models and sprites can be used freely.',
   // ---------- S8: tekst → obraz ----------
   'Opisz słowami': 'Describe in words',
   'Funkcja AI: obraz z opisu słownego': 'AI feature: image from a text description',

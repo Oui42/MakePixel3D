@@ -732,7 +732,7 @@ function setStage(stage) {
 /** Na czas usuwania tła / generowania blokujemy wszystko, co mogłoby podmienić zdjęcie lub model. */
 function setBusy(on) {
   document.body.classList.toggle('busy', on);
-  for (const id of ['file', 'glbFile', 'welcomePhoto', 'welcomeGlb', 'welcomeText', 'quality', 'removeBg', 'btnMask', 'btnT2I', 't2iPrompt']) $(id).disabled = on;
+  for (const id of ['file', 'glbFile', 'welcomePhoto', 'welcomeGlb', 'welcomeText', 'quality', 'engine', 'removeBg', 'btnMask', 'btnT2I', 't2iPrompt']) $(id).disabled = on;
   $('btnGenerate').disabled = on || !state.cutoutBlob;
 }
 
@@ -877,6 +877,7 @@ async function generate() {
     if (state.sourceBlob) form.append('source', state.sourceBlob, 'source.png');
     form.append('resolution', $('quality').value);
     form.append('name', state.baseName);
+    form.append('engine', $('engineRow').hidden ? 'triposr' : $('engine').value);   // S9: dokładny silnik, gdy zainstalowany
     const t0 = performance.now();
     const res = await postRaw('/api/reconstruct', form);
     state.libraryId = res.headers.get('X-Library-Id') || null;
@@ -1476,7 +1477,7 @@ async function openAbout() {
       tr.append(Object.assign(document.createElement('td'), { textContent: k }), Object.assign(document.createElement('td'), { textContent: v }));
       return tr;
     }));
-    await checkT2I();   // stan instalacji funkcji S8 (przycisk „Zainstaluj” / postęp)
+    await Promise.all([checkT2I(), checkMultiview()]);   // stan instalacji funkcji (przycisk „Zainstaluj” / postęp)
     $('aboutFeatures').replaceChildren(...Object.entries(features).map(([key, f]) => {
       const box = document.createElement('div');
       box.className = 'feature';
@@ -1598,9 +1599,34 @@ $('btnT2I').addEventListener('click', generateFromText);
 $('t2iPrompt').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) generateFromText(); });
 checkT2I();   // czy funkcja jest zainstalowana → przyciski w Źródle i na ekranie startowym
 
+// ---------- S9: lepszy tył obiektu (silnik InstantMesh; widoczny w zakładce Model, gdy zainstalowany) ----------
+let mvInfo = null;
+
+function renderMultiview() {
+  $('engineRow').hidden = !mvInfo?.installed;
+}
+
+async function checkMultiview() {
+  try { mvInfo = await (await fetch('/api/multiview')).json(); renderMultiview(); } catch { /* serwer niedostępny */ }
+  return mvInfo;
+}
+checkMultiview();
+
+// Funkcje zaawansowane instalowane z okna „Sprzęt i zaawansowane AI”: adres API, stan, komunikat po instalacji.
+const FEATURE_UI = {
+  text2image: { api: '/api/text2image', check: checkT2I, info: () => t2iInfo,
+    done: () => t('Funkcja „Tekst → obraz” jest gotowa. Na ekranie startowym pojawił się przycisk „Opisz słowami”.') },
+  multiview: { api: '/api/multiview', check: checkMultiview, info: () => mvInfo,
+    done: () => t('Funkcja „Lepszy tył obiektu” jest gotowa. W zakładce Model pojawił się wybór silnika 3D.'),
+    note: () => t('Licencja: wagi modelu Zero123++ są na licencji CC-BY-NC 4.0 (bez użycia w produktach komercyjnych); wygenerowane modele i sprite\'y możesz wykorzystywać dowolnie.') },
+};
+
 /** Przycisk „Zainstaluj” w oknie „Sprzęt i zaawansowane AI” + pasek postępu pobierania. */
 function featureInstallControls(key, feature) {
-  if (key !== 'text2image' || !feature.available) return [];
+  const ui = FEATURE_UI[key];
+  if (!ui || !feature.available) return [];
+  const out = [];
+  if (ui.note) out.push(Object.assign(document.createElement('p'), { className: 'muted', textContent: ui.note() }));
   const wrap = document.createElement('div');
   wrap.className = 'feat-install';
   const btn = document.createElement('button');
@@ -1615,26 +1641,27 @@ function featureInstallControls(key, feature) {
       return;
     }
     btn.hidden = false;
-    btn.textContent = t('Zainstaluj (ok. {gb} GB, jednorazowo)', { gb: Math.round((info?.sizeMb ?? 11000) / 1000) });
+    btn.textContent = t('Zainstaluj (ok. {gb} GB, jednorazowo)', { gb: Math.round((info?.sizeMb ?? 10000) / 1000) });
     prog.textContent = info?.error ?? '';
   };
   btn.addEventListener('click', async () => {
     btn.disabled = true;
     try {
-      paint(await (await fetch('/api/text2image/install', { method: 'POST' })).json());
+      paint(await (await fetch(`${ui.api}/install`, { method: 'POST' })).json());
       const tick = setInterval(async () => {
-        const info = await checkT2I();
+        const info = await ui.check();
         paint(info);
         if (info && !info.installing) {
           clearInterval(tick);
-          if (info.installed) toast(t('Funkcja „Tekst → obraz” jest gotowa. Na ekranie startowym pojawił się przycisk „Opisz słowami”.'));
+          if (info.installed) toast(ui.done());
         }
       }, 1500);
     } catch (e) { prog.textContent = e.message; btn.disabled = false; }
   });
-  paint(t2iInfo ?? { installed: feature.installed });
+  paint(ui.info() ?? { installed: feature.installed });
   wrap.append(btn, prog);
-  return [wrap];
+  out.push(wrap);
+  return out;
 }
 
 // ---------- Motyw jasny / ciemny ----------

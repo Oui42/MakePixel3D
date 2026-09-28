@@ -23,3 +23,7 @@ gguf>=0.10
 accelerate>=1.0
 sentencepiece>=0.2
 protobuf>=4
+# advanced AI feature S9 (better back side): InstantMesh + Zero123++ (torchvision comes with torch from the same index)
+xatlas>=0.0.9
+PyMCubes>=0.1
+opencv-python-headless>=4.8

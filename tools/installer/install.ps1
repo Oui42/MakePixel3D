@@ -29,6 +29,7 @@ $ProgressPreference = "SilentlyContinue"
 $PythonVersion = "3.12.10"
 $PythonUrl = "https://www.python.org/ftp/python/$PythonVersion/python-$PythonVersion-amd64.exe"
 $TripoSRUrl = "https://github.com/VAST-AI-Research/TripoSR/archive/refs/heads/main.zip"
+$InstantMeshUrl = "https://github.com/TencentARC/InstantMesh/archive/refs/heads/main.zip"   # code for the "better back side" feature
 $WebView2Url = "https://go.microsoft.com/fwlink/p/?LinkId=2124703"   # Evergreen Bootstrapper
 # The ?nocache=<time> suffix bypasses GitHub's cache: for a few minutes after an asset is replaced (same name),
 # "latest/download/latest.json" can still return the OLD file while the ZIP is already new -> false "SHA-256 mismatch".
@@ -237,7 +238,7 @@ try { & $py -c "import torch; import sys; sys.exit(0 if ('$Torch' == 'cpu') == (
 if ($torchOk) { Info "PyTorch ($Torch) is already installed." } else {
     $size = if ($Torch -eq "cu128") { "about 3 GB" } else { "about 300 MB" }
     Info "Installing PyTorch ($Torch, $size) - this can take 5-15 minutes..."
-    Run $py @("-m", "pip", "install", "torch", "--index-url", "https://download.pytorch.org/whl/$Torch", "--disable-pip-version-check", "--progress-bar", "off") "Installing PyTorch"
+    Run $py @("-m", "pip", "install", "torch", "torchvision", "--index-url", "https://download.pytorch.org/whl/$Torch", "--disable-pip-version-check", "--progress-bar", "off") "Installing PyTorch"
 }
 Info "Installing libraries from requirements.txt..."
 Run $py @("-m", "pip", "install", "-r", (Join-Path $AppDir "requirements.txt"), "--disable-pip-version-check", "--progress-bar", "off") "Installing libraries"
@@ -258,6 +259,18 @@ if (Test-Path (Join-Path $tsr "tsr")) { Info "TripoSR code is already present." 
     if (Test-Path $tsr) { Remove-Item $tsr -Recurse -Force }
     Move-Item $inner.FullName $tsr
     Info "Extracted TripoSR."
+}
+$im = Join-Path $AppDir "server	hird_party\InstantMesh"
+if (Test-Path (Join-Path $im "src\models\lrm_mesh.py")) { Info "InstantMesh code is already present." } else {
+    $zip = Join-Path $Tmp "InstantMesh-main.zip"
+    if (-not (Test-Path $zip)) { Download $InstantMeshUrl $zip "InstantMesh code (Apache-2.0)" }
+    $ex = Join-Path $Tmp "InstantMesh-extract"
+    if (Test-Path $ex) { Remove-Item $ex -Recurse -Force }
+    Expand-Archive $zip $ex -Force
+    $inner = Get-ChildItem $ex -Directory | Select-Object -First 1
+    if (Test-Path $im) { Remove-Item $im -Recurse -Force }
+    Move-Item $inner.FullName $im
+    Info "Extracted InstantMesh."
 }
 $env:PYTHONIOENCODING = "utf-8"
 Info "Downloading AI models (about 1.8 GB) - this can take a few minutes..."
