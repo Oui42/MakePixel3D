@@ -186,6 +186,11 @@ if ($Local) {
         } finally { $z.Dispose() }
         Set-Content $marker $manifest.sha256.ToLower() -Encoding ASCII
         Info "Extracted $($manifest.version) to $AppDir"
+        # A previously downloaded (older) in-app update would overwrite these files at the next start - drop it.
+        foreach ($upd in (Join-Path $AppDir "updates"), (Join-Path $env:LOCALAPPDATA "MakePixel3D\updates")) {
+            Remove-Item (Join-Path $upd "pending") -Recurse -Force -ErrorAction SilentlyContinue
+            Remove-Item (Join-Path $upd "pending.json") -Force -ErrorAction SilentlyContinue
+        }
     }
 }
 if (-not (Test-Path "$AppDir\server\launch.py")) { Fail "Program files are missing in $AppDir." }
