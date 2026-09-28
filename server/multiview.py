@@ -26,6 +26,8 @@ ZERO_DIR = DIR / "zero123plus-v1.2"
 IM_FILES = DIR / "InstantMesh"
 INSTALLED_FLAG = DIR / "installed.json"
 IM_DIR = paths.PROJECT / "server" / "third_party" / "InstantMesh"
+if not (IM_DIR / "src").is_dir() and (DIR / "InstantMesh-code" / "src").is_dir():
+    IM_DIR = DIR / "InstantMesh-code"   # kod pobrany przez _download_code() w instalacji Program Files
 
 ZERO_REPO = "sudo-ai/zero123plus-v1.2"
 ZERO_PATTERNS = ["*.json", "*.txt", "*.safetensors", "*.bin"]
@@ -109,6 +111,10 @@ def _install():
     threading.Thread(target=watch, daemon=True).start()
     try:
         if not code_present():
+            # kopie zaktualizowane z wersji sprzed S9 nie mają kodu (paczka aktualizacji pomija third_party)
+            status["current"] = tr("kod InstantMesh (GitHub)")
+            _download_code()
+        if not code_present():
             raise RuntimeError(tr("brakuje kodu InstantMesh (server/third_party/InstantMesh) – uruchom instalator ponownie"))
         status["current"] = tr("widoki: Zero123++ (5,6 GB)")
         snapshot_download(ZERO_REPO, local_dir=ZERO_DIR, allow_patterns=ZERO_PATTERNS, ignore_patterns=ZERO_IGNORE)
@@ -128,6 +134,34 @@ def _install():
         status.update(installing=False, current=None)
         import models_setup
         models_setup.enable_offline_if_ready()
+
+
+CODE_ZIP_URL = "https://github.com/TencentARC/InstantMesh/archive/refs/heads/main.zip"
+
+
+def _download_code():
+    """Kod InstantMesh jako ZIP z GitHuba (bez Gita) → server/third_party/InstantMesh. Folder programu w Program Files
+    jest tylko do odczytu → wtedy kod trafia obok modeli (paths.FEATURE_MODELS/multiview/InstantMesh-code)."""
+    import io
+    import shutil
+    import urllib.request
+    import zipfile
+    global IM_DIR
+    target = IM_DIR if paths.PROJECT_WRITABLE else DIR / "InstantMesh-code"
+    req = urllib.request.Request(CODE_ZIP_URL, headers={"User-Agent": "MakePixel3D"})
+    with urllib.request.urlopen(req, timeout=60) as r:  # noqa: S310
+        data = r.read()
+    tmp = target.parent / "InstantMesh-extract"
+    if tmp.exists():
+        shutil.rmtree(tmp)
+    with zipfile.ZipFile(io.BytesIO(data)) as z:
+        z.extractall(tmp)
+    inner = next(p for p in tmp.iterdir() if p.is_dir())
+    if target.exists():
+        shutil.rmtree(target)
+    shutil.move(str(inner), str(target))
+    shutil.rmtree(tmp, ignore_errors=True)
+    IM_DIR = target
 
 
 def install_in_background():

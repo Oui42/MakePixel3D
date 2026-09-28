@@ -180,6 +180,25 @@ def has_pending() -> bool:
     return PENDING_INFO.is_file() and PENDING.is_dir()
 
 
+def _ensure_torchvision():
+    """torchvision (S9) nie jest w requirements.txt – musi pochodzić z tego samego indeksu PyTorch (cpu/cu128) co torch,
+    a wariant zapisał instalator w config/install.json. Kopie sprzed 0.2.0 nie mają torchvision → doinstalowanie."""
+    import subprocess
+    import sys
+    try:
+        import torchvision  # noqa: F401
+        return
+    except Exception:  # noqa: BLE001 – brak albo niezgodna wersja
+        pass
+    variant = "cu128"
+    try:
+        variant = json.loads((_CONFIG_DIR / "install.json").read_text(encoding="utf-8-sig")).get("torch") or variant
+    except (OSError, ValueError):
+        pass
+    subprocess.run([sys.executable, "-m", "pip", "install", "-q", "torchvision", "--index-url",
+                    f"https://download.pytorch.org/whl/{variant}"], check=False)
+
+
 def apply_pending() -> str | None:
     """Wywoływane przez launch.py PRZED startem serwera. Zwraca zainstalowaną wersję albo None.
     Gdy folder programu nie jest zapisywalny (np. C:/Program Files), launch.py uruchamia to w procesie z uprawnieniami
@@ -203,6 +222,7 @@ def apply_pending() -> str | None:
         import subprocess
         import sys
         subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-r", str(PROJECT / "requirements.txt")], check=False)
+        _ensure_torchvision()
     shutil.rmtree(PENDING, ignore_errors=True)
     PENDING_INFO.unlink(missing_ok=True)
     UPDATES.mkdir(parents=True, exist_ok=True)
