@@ -17,7 +17,10 @@ FEATURES = {
     "text2image": {
         "name": "Tekst → obraz → sprite",
         "description": "Opisujesz obiekt słowami, a program sam tworzy obraz, model 3D i sprite'y (bez szukania zdjęć).",
-        "vram": 12, "ram": 16, "disk": 25,
+        # FLUX.1-schnell w wersji skwantyzowanej (fp8 / NF4, ~6–8 GB VRAM przy generowaniu) – pełna wersja bf16
+        # potrzebowałaby ~24 GB. 10 GB = zapas na model 3D wczytany obok. Karta „12 GB” zgłasza 11.9 GB (GiB),
+        # dlatego wymagania nie mogą być równe nominalnej pojemności karty (zgłoszenie użytkownika, RTX 5070).
+        "vram": 10, "ram": 16, "disk": 20,
     },
     "multiview": {
         "name": "Lepszy tył obiektu",
@@ -93,7 +96,7 @@ def features() -> dict:
         reasons = []
         if not hw["cuda"]:
             reasons.append(tr("wymaga karty NVIDIA z obsługą CUDA") + (tr(" (wykryto: {gpu})", gpu=hw["gpu"]) if hw["gpu"] else ""))
-        elif hw["vramGb"] < f["vram"]:
+        elif hw["vramGb"] + 0.3 < f["vram"]:   # 0.3 GB tolerancji: karta „8 GB” zgłasza ~7.9 GB
             reasons.append(tr("za mało pamięci karty: {have} GB, potrzeba {need} GB", have=hw["vramGb"], need=f["vram"]))
         # system zgłasza np. 15,8 GB przy 16 GB kości – 1 GB tolerancji
         if hw["ramGb"] and hw["ramGb"] + 1 < f["ram"]:
