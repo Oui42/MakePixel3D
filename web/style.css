@@ -330,7 +330,11 @@ h1 .logo { image-rendering: pixelated; }
 /* S8: tekst → obraz (zakładka Źródło) + przycisk instalacji w oknie „Sprzęt i zaawansowane AI” */
 #t2iBlock .lbl { display: block; font-size: 13px; margin: 4px 0; }
 #t2iPrompt { width: 100%; box-sizing: border-box; resize: vertical; min-height: 56px; font: inherit; font-size: 13px;
-             padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: inherit; }
-#t2iPrompt:focus { outline: none; border-color: var(--accent); }
-#t2iSeed { width: 110px; }
+             padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); }
+/* pola tekstowe/liczbowe w tym samym stylu co listy i przyciski (domyślne wyglądały obco w ciemnym motywie – zgłoszenie użytkownika) */
+input[type=number], input[type=text] { font: inherit; font-size: 13px; color: var(--text); background: var(--bg); border: 1px solid var(--line);
+                                       border-radius: 6px; padding: 5px 9px; box-sizing: border-box; }
+input[type=number]:focus, input[type=text]:focus, #t2iPrompt:focus { outline: none; border-color: var(--accent); }
+input[type=number]::placeholder, #t2iPrompt::placeholder { color: var(--muted); opacity: .8; }
+#t2iSeed { width: 128px; text-align: right; }
 .feat-install { display: flex; align-items: center; gap: 10px; margin-top: 6px; font-size: 12.5px; }

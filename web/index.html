@@ -94,8 +94,9 @@
             <div class="or"><span>albo</span></div>
             <label class="lbl" for="t2iPrompt">Opisz słowami – AI stworzy obraz</label>
             <textarea id="t2iPrompt" rows="3" placeholder="np. medieval knight in plate armor, full body" title="Najlepsze wyniki daje opis po angielsku"></textarea>
-            <div class="row compact">
-              <label title="To samo ziarno = ten sam obraz dla tego samego opisu">Ziarno <input id="t2iSeed" type="number" min="0" max="2147483647" placeholder="losowe"></label>
+            <div class="row">
+              <label for="t2iSeed" title="To samo ziarno = ten sam obraz dla tego samego opisu">Ziarno</label>
+              <input id="t2iSeed" type="number" min="0" max="2147483647" placeholder="losowe" title="To samo ziarno = ten sam obraz dla tego samego opisu">
             </div>
             <button id="btnT2I" class="block primary" type="button">Wygeneruj obraz z opisu</button>
             <p id="t2iStatus" class="status"></p>
