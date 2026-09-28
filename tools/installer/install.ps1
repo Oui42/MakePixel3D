@@ -245,6 +245,13 @@ if ($torchOk) { Info "PyTorch ($Torch) is already installed." } else {
     Info "Installing PyTorch ($Torch, $size) - this can take 5-15 minutes..."
     Run $py @("-m", "pip", "install", "torch", "torchvision", "--index-url", "https://download.pytorch.org/whl/$Torch", "--disable-pip-version-check", "--progress-bar", "off") "Installing PyTorch"
 }
+# torchvision (feature S9) must come from the same PyTorch index as torch; an older installation may have torch only.
+$tvOk = $false
+try { & $py -c "import torchvision" 2>$null; $tvOk = ($LASTEXITCODE -eq 0) } catch {}
+if (-not $tvOk) {
+    Info "Installing torchvision ($Torch)..."
+    Run $py @("-m", "pip", "install", "torchvision", "--index-url", "https://download.pytorch.org/whl/$Torch", "--disable-pip-version-check", "--progress-bar", "off") "Installing torchvision"
+}
 Info "Installing libraries from requirements.txt..."
 Run $py @("-m", "pip", "install", "-r", (Join-Path $AppDir "requirements.txt"), "--disable-pip-version-check", "--progress-bar", "off") "Installing libraries"
 New-Item -ItemType Directory -Force (Join-Path $AppDir "config") | Out-Null
