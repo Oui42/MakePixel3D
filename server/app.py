@@ -17,6 +17,9 @@ import paths  # noqa: E402 – foldery programu/danych (Program Files → dane w
 os.environ.setdefault("HF_HOME", str(paths.MODELS / "huggingface"))
 os.environ.setdefault("U2NET_HOME", str(paths.MODELS / "rembg"))
 os.environ.setdefault("NUMBA_CACHE_DIR", str(paths.CACHE / "numba"))   # patrz paths.CACHE
+# diffusers zapisuje kod własnych pipeline'ów (Zero123++, S9) do HF_MODULES_CACHE (domyślnie HF_HOME/modules) –
+# w Program Files to „Odmowa dostępu” → folder zapisywalny
+os.environ.setdefault("HF_MODULES_CACHE", str(paths.CACHE / "hf_modules"))
                              # zamiennik torchmcubes
 sys.path.insert(0, str(ROOT / "third_party" / "TripoSR"))  # pakiet tsr
 
