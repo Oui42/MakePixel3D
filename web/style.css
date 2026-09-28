@@ -267,6 +267,8 @@ button.chip:hover { border-color: var(--accent); color: var(--accent); }
 .update-bar { display: flex; align-items: center; gap: 10px; padding: 6px 18px; background: var(--accent); color: var(--accent-text); font-size: 13px; }
 .update-bar .primary { width: auto; margin: 0; padding: 4px 12px; background: var(--accent-text); color: var(--accent); border-color: transparent; }
 .update-bar .link { color: inherit; }
+/* pasek ma tło w kolorze akcentu – domyślny kolor hover (akcent) sprawiał, że „Co nowego” znikało (zgłoszenie użytkownika) */
+.update-bar .link:hover { color: inherit; opacity: .75; text-decoration: none; }
 .update-bar .icon-btn { margin-left: auto; width: 26px; height: 26px; color: inherit; border-color: transparent; background: transparent; }
 .update-bar progress { width: 160px; height: 8px; }
 .dlg.about { width: min(640px, calc(100vw - 32px)); }
