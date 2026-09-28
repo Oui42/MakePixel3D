@@ -265,7 +265,7 @@ if (Test-Path (Join-Path $tsr "tsr")) { Info "TripoSR code is already present." 
     Move-Item $inner.FullName $tsr
     Info "Extracted TripoSR."
 }
-$im = Join-Path $AppDir "server	hird_party\InstantMesh"
+$im = Join-Path $AppDir "server\third_party\InstantMesh"
 if (Test-Path (Join-Path $im "src\models\lrm_mesh.py")) { Info "InstantMesh code is already present." } else {
     $zip = Join-Path $Tmp "InstantMesh-main.zip"
     if (-not (Test-Path $zip)) { Download $InstantMeshUrl $zip "InstantMesh code (Apache-2.0)" }
