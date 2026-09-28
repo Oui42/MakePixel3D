@@ -17,3 +17,4 @@ INSTRUKCJA.md
 .claude/
 *.local.md
 cache/
+.venv311/
