@@ -367,6 +367,7 @@ def rig(glb: bytes, humanoid: bool = False) -> bytes:
         work = paths.CACHE / "rig" / uuid.uuid4().hex
         try:
             _ensure_sitecustomize()
+            _write_configs()          # ścieżki do wag są absolutne – odświeżamy, gdyby folder danych się zmienił (kopia)
             reconstruct.unload()      # UniRig potrzebuje karty dla siebie (min. 8 GB)
             text2image.unload()
             multiview.unload()
