@@ -80,7 +80,7 @@ export function formatDate(seconds) {
  * (ekran startowy: sam kafelek jest przyciskiem „otwórz”).
  */
 export function renderTiles(container, entries, actions) {
-  container.replaceChildren(...entries.map((entry) => {
+  const tiles = entries.map((entry) => {
     const tile = document.createElement('div');
     tile.className = 'tile';
     const img = document.createElement('img');
@@ -111,7 +111,25 @@ export function renderTiles(container, entries, actions) {
       tile.append(bar);
     }
     return tile;
-  }));
+  });
+  if (actions.create) {   // pierwszy kafelek: nowy, pusty projekt (jak po włączeniu programu)
+    const tile = document.createElement('div');
+    tile.className = 'tile tile-new';
+    const open = document.createElement('button');
+    open.type = 'button';
+    open.className = 'tile-open';
+    const plus = document.createElement('span');
+    plus.className = 'plus';
+    plus.textContent = '+';
+    const name = document.createElement('b');
+    name.textContent = t('Nowy projekt');
+    open.append(plus, name);
+    open.title = t('Zacznij od pustego ekranu');
+    open.addEventListener('click', () => actions.create());
+    tile.append(open);
+    tiles.unshift(tile);
+  }
+  container.replaceChildren(...tiles);
 }
 
 function button(text, onClick, cls = '') {

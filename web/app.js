@@ -759,6 +759,7 @@ $('tabs').addEventListener('click', (e) => {
 // empty → tylko wgranie zdjęcia / modelu; photo → ustawienia 2D + generowanie; model → wszystko.
 function setStage(stage) {
   document.body.dataset.stage = stage;
+  $('btnNew').hidden = stage === 'empty';   // „Nowy” tylko, gdy coś jest otwarte
   setTab(currentTab);   // zakładka niedostępna na tym etapie (np. Kamera bez modelu) → wracamy do „Źródło”
   // model wczytany z pliku (bez zdjęcia): nie ma z czego generować ani do czego dopasować kolorów
   $('genBlock').hidden = !state.cutoutBlob;
@@ -1304,10 +1305,38 @@ async function refreshRecent() {
   }
 }
 
+/** „Nowy”: zamknięcie bieżącej pracy → pusty ekran startowy (jak po włączeniu programu). */
+function newProject() {
+  if (document.body.classList.contains('busy') || !confirmDiscard()) return;
+  if ($('galleryDialog').open) $('galleryDialog').close();
+  setPainting(false);
+  resetModel();
+  state.source = state.sourceBlob = state.aiMask = state.cutoutBlob = state.cutoutImg = state.refStats = null;
+  state.editPrev = null;
+  state.sprites = [];
+  state.yaws = [];
+  state.baseName = 'sprite';
+  state.photoId++;
+  $('btnEditUndo').hidden = true;
+  $('cutoutThumb').hidden = true;
+  $('cutoutThumb').removeAttribute('src');
+  $('file').value = '';
+  $('glbFile').value = '';
+  $('strip').replaceChildren();
+  for (const id of ['cutoutStatus', 'genStatus', 't2iStatus', 'editStatus', 'rigStatus', 'paintStatus', 'saveStatus']) setStatus(id, '');
+  setExportEnabled(false);
+  clearAnim();
+  setStage('empty');
+  setTab('source');
+  refreshRecent();
+}
+$('btnNew').addEventListener('click', newProject);
+
 async function openGallery() {
   const list = await refreshRecent();
   $('galleryEmpty').hidden = !!list.length;
   renderTiles($('galleryTiles'), list, {
+    create: newProject,
     open: openEntry,
     async rename(entry) {
       const name = prompt(t('Nowa nazwa:'), entry.name);

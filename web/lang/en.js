@@ -137,6 +137,10 @@ export const EN = {
   // ---------- nagłówek, zakładki, ogólne ----------
   'Modele zapisane na tym komputerze': 'Models saved on this computer',
   'Galeria': 'Gallery',
+  'Nowy': 'New',
+  'Zamknij bieżącą pracę i zacznij od pustego ekranu (niezapisane zmiany zapyta, czy porzucić)': 'Close the current work and start from an empty screen (asks before discarding unsaved changes)',
+  'Nowy projekt': 'New project',
+  'Zacznij od pustego ekranu': 'Start from an empty screen',
   'Przełącz motyw': 'Switch theme',
   'Przełącz na motyw jasny': 'Switch to light theme',
   'Przełącz na motyw ciemny': 'Switch to dark theme',

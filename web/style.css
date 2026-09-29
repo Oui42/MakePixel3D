@@ -186,6 +186,12 @@ select[data-seg] { display: none; }
 .tile-open b { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tile-open small { color: var(--muted); font-size: 11px; }
 .tile-actions { display: flex; border-top: 1px solid var(--line); }
+/* kafelek „Nowy projekt” na początku galerii (życzenie użytkownika) – pusty start jak po włączeniu programu */
+.tile.tile-new { border-style: dashed; background: none; }
+.tile-new .tile-open { align-items: center; justify-content: center; height: 100%; min-height: 150px; color: var(--muted); }
+.tile-new .tile-open:hover { color: var(--accent); }
+.tile-new .plus { font-size: 40px; line-height: 1; font-weight: 300; }
+.tile-new b { font-size: 13px; }
 .tile-actions button { flex: 1; border: 0; border-radius: 0; font-size: 12px; padding: 5px; background: none; }
 .tile-actions button + button { border-left: 1px solid var(--line); }
 .tile-actions button.danger { color: var(--danger); }
@@ -329,13 +335,13 @@ h1 .logo { image-rendering: pixelated; }
 .models-bar .primary { color: var(--danger); background: #fff; }
 
 /* S8: tekst → obraz (zakładka Źródło) + przycisk instalacji w oknie „Sprzęt i zaawansowane AI” */
-#t2iBlock .lbl { display: block; font-size: 13px; margin: 4px 0; }
-#t2iPrompt { width: 100%; box-sizing: border-box; resize: vertical; min-height: 56px; font: inherit; font-size: 13px;
+#t2iBlock .lbl, #editBlock .lbl { display: block; font-size: 13px; margin: 4px 0; }
+#t2iPrompt, #editPrompt { width: 100%; box-sizing: border-box; resize: vertical; min-height: 56px; font: inherit; font-size: 13px;
              padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); }
 /* pola tekstowe/liczbowe w tym samym stylu co listy i przyciski (domyślne wyglądały obco w ciemnym motywie – zgłoszenie użytkownika) */
 input[type=number], input[type=text] { font: inherit; font-size: 13px; color: var(--text); background: var(--bg); border: 1px solid var(--line);
                                        border-radius: 6px; padding: 5px 9px; box-sizing: border-box; }
-input[type=number]:focus, input[type=text]:focus, #t2iPrompt:focus { outline: none; border-color: var(--accent); }
-input[type=number]::placeholder, #t2iPrompt::placeholder { color: var(--muted); opacity: .8; }
-#t2iSeed { width: 128px; text-align: right; }
+input[type=number]:focus, input[type=text]:focus, #t2iPrompt:focus, #editPrompt:focus { outline: none; border-color: var(--accent); }
+input[type=number]::placeholder, #t2iPrompt::placeholder, #editPrompt::placeholder { color: var(--muted); opacity: .8; }
+#t2iSeed, #editSeed { width: 128px; text-align: right; }
 .feat-install { display: flex; align-items: center; gap: 10px; margin-top: 6px; font-size: 12.5px; }
