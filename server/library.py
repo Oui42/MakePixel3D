@@ -14,7 +14,8 @@ from PIL import Image
 from paths import LIBRARY as ROOT  # noqa: E402 – folder danych (patrz paths.py)
 # project.json – zapisany stan pracy (ustawienia, obrót modelu, poprawki pikseli); powstaje przy „Zapisz w galerii”
 FILES = {"source.png": "image/png", "model.glb": "model/gltf-binary", "thumb.png": "image/png",
-         "project.json": "application/json"}
+         "project.json": "application/json",
+         "rigged.glb": "model/gltf-binary"}   # S10: model ze szkieletem i wagami skórowania (UniRig)
 _ID = re.compile(r"^[0-9a-f]{32}$")
 THUMB = 192
 
@@ -80,6 +81,18 @@ def list_entries() -> list[dict]:
         except (OSError, ValueError):
             continue  # uszkodzony wpis pomijamy, reszta galerii działa
     return sorted(out, key=lambda m: m.get("created", 0), reverse=True)
+
+
+def save_rigged(entry_id: str, glb: bytes, humanoid: bool) -> dict:
+    """S10: model ze szkieletem (UniRig) obok model.glb; meta dostaje `rigged` i `humanoid`."""
+    d = _dir(entry_id)
+    (d / "rigged.glb").write_bytes(glb)
+    info = json.loads((d / "meta.json").read_text(encoding="utf-8"))
+    info["rigged"] = True
+    info["humanoid"] = bool(humanoid)
+    info["updated"] = time.time()
+    _write_meta(d, info)
+    return info
 
 
 def file_path(entry_id: str, name: str) -> Path:

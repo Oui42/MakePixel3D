@@ -14,6 +14,7 @@ import { initSegmented, syncShortcutButtons } from './segmented.js';
 import { t, getLang, setLang, locale, translateDom } from './i18n.js';
 import { imageDataFromBlob, imageDataToBlob, cropToObject, MaskEditor } from './mask.js';
 import { PixelEditor } from './editor.js';
+import { findRig, resetPose, clipNames, buildClip, CLIP_LABELS } from './rig.js';
 import {
   listEntries, fetchFile, renameEntry, deleteEntry, renderTiles, createEntry, saveProject, fetchProject,
 } from './gallery.js';
@@ -42,6 +43,9 @@ const state = {
   symMesh: null,      // siatka symetryczna (gdy symetria włączona – zamiast modelu)
   voxel: null,        // model z wokseli (InstancedMesh) – gdy włączony, zastępuje model/symetrię
   voxelData: null,
+  rig: null,          // S10: szkielet w modelu (rig.js findRig) – null, gdy model bez kości
+  mixer: null,        // THREE.AnimationMixer dla klipów proceduralnych
+  action: null,       // aktywny klip (null = bez animacji, poza spoczynkowa)
   customPalette: loadCustomPalette(),
   dirIndex: 0,
   sprites: [],
@@ -91,9 +95,13 @@ new ResizeObserver(([e]) => {
   viewCam.aspect = width / Math.max(1, height);
   viewCam.updateProjectionMatrix();
 }).observe($('viewer'));
+const viewClock = new THREE.Clock();
 viewer.setAnimationLoop(() => {
   controls.update();
   placeHeadlight(sun, viewCam);
+  // S10: podgląd 3D gra wybraną animację na żywo (sprite'y renderują własną klatkę – applyClipPose w renderSprites)
+  if (state.mixer && state.action && !anim.paused) state.mixer.update(viewClock.getDelta());
+  else viewClock.getDelta();
   viewer.render(scene, viewCam);
 });
 
@@ -291,6 +299,7 @@ async function loadGlb(buffer) {
   state.meshes = [];
   state.model.traverse((o) => { if (o.isMesh) state.meshes.push(o); });
   state.modelId++;
+  setupRig();   // S10: szkielet (jeśli GLB go ma) → klipy animacji
 
   grid.visible = arrow.visible = true;
   state.dirIndex = 0;
@@ -309,8 +318,11 @@ function fitPoints() {
   const v = new THREE.Vector3();
   for (const m of meshes) {
     const pos = m.geometry.attributes.position;
+    const posed = m.isSkinnedMesh && state.action;   // S10: kadr liczony z pozy animacji, nie z pozy spoczynkowej
+    if (posed) m.skeleton.update();
     for (let i = 0; i < pos.count; i += step) {
-      v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld);
+      if (posed) m.getVertexPosition(i, v).applyMatrix4(m.matrixWorld);
+      else v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld);
       out.push(v.x, v.y, v.z);
     }
   }
@@ -377,8 +389,9 @@ function scheduleRefresh() {
 }
 
 /** Sprite'y dla podanych kierunków – wspólna paleta, skala i kadr. */
-function renderSprites(yaws) {
+function renderSprites(yaws, poseTime = null) {
   const { W, H } = spriteSize();
+  if (state.action) applyClipPose(poseTime ?? clipFrameTime());   // S10: sprite'y z wybranej klatki ruchu
   const S = Math.max(1, Math.min(8, Math.floor(MAX_RAW / Math.max(W, H))));
   const o = options();
   const pad = (o.outline !== 'none' ? 1 : 0) + 1;   // margines w pikselach (na kontur)
@@ -417,7 +430,8 @@ function editSignature() {
   const q = tilt.quaternion;
   return [`3d:${state.modelId}`, `${W}x${H}`, num('pitch'), num('zoom'), $('anchor').value, num('baseYaw'),
     [q.x, q.y, q.z, q.w].map((v) => v.toFixed(2)).join(','), $('symmetry').value, num('shadowOpacity') > 0, margins,
-    $('voxelMode').value === 'on' ? `vox${num('voxelRes')}` : 'smooth'].join('|');
+    $('voxelMode').value === 'on' ? `vox${num('voxelRes')}` : 'smooth',
+    state.action ? `clip:${state.action.getClip().name}:${num('animFrame')}/${num('clipFrames')}` : 'rest'].join('|');
 }
 
 const editKey = (yaw, sig = editSignature()) => `${sig}|${yaw}`;
@@ -616,7 +630,12 @@ const animFollowsDirections = () => $('animFrames').value === 'dirs';
 function buildAnimFrames() {
   clearTimeout(anim.buildTimer);
   if (!state.model) return;
-  if (animFollowsDirections()) {
+  if (state.action) {
+    // S10: animacja ruchu – klatki klipu dla wybranego kierunku (zamiast obrotu)
+    const n = num('clipFrames'), yaw = state.yaws[state.dirIndex] ?? 0, dur = state.action.getClip().duration;
+    anim.frames = Array.from({ length: n }, (_, i) => renderSprites([yaw], (i / n) * dur).sprites[0]);
+    applyClipPose(clipFrameTime());   // z powrotem klatka wybrana suwakiem
+  } else if (animFollowsDirections()) {
     anim.frames = state.sprites;   // już policzone – bez dodatkowego renderu
   } else {
     const n = num('animFrames');
@@ -650,10 +669,12 @@ function restartAnim() {
   anim.timer = 0;
   drawAnimFrame();
   if (!anim.paused && anim.frames.length > 1) {
+    // S10: przy animacji ruchu pętla trwa tyle, co klip (nie „pełny obrót w … s”)
+    const total = state.action ? state.action.getClip().duration : num('gifDuration');
     anim.timer = setInterval(() => {
       anim.index = (anim.index + 1) % anim.frames.length;
       drawAnimFrame();
-    }, (num('gifDuration') * 1000) / anim.frames.length);
+    }, (total * 1000) / anim.frames.length);
   }
   $('btnPause').textContent = anim.paused ? '▶' : '❚❚';
   $('btnPause').title = anim.paused ? t('Wznów animację (spacja)') : t('Zatrzymaj animację (spacja)');
@@ -732,7 +753,7 @@ function setStage(stage) {
 /** Na czas usuwania tła / generowania blokujemy wszystko, co mogłoby podmienić zdjęcie lub model. */
 function setBusy(on) {
   document.body.classList.toggle('busy', on);
-  for (const id of ['file', 'glbFile', 'welcomePhoto', 'welcomeGlb', 'welcomeText', 'quality', 'engine', 'removeBg', 'btnMask', 'btnT2I', 't2iPrompt']) $(id).disabled = on;
+  for (const id of ['file', 'glbFile', 'welcomePhoto', 'welcomeGlb', 'welcomeText', 'quality', 'engine', 'removeBg', 'btnMask', 'btnT2I', 't2iPrompt', 'btnRig', 'rigType']) $(id).disabled = on;
   $('btnGenerate').disabled = on || !state.cutoutBlob;
 }
 
@@ -808,6 +829,7 @@ function resetModel() {
   state.meshes = [];
   state.glbBlob = null;
   state.libraryId = null;
+  clearRig();
   updateSymmetry();
   clearAnim();
   grid.visible = arrow.visible = false;
@@ -1275,7 +1297,8 @@ async function openEntry(entry) {
   setBusy(true);
   setStatus('cutoutStatus', t('Otwieranie z galerii…'), 'busy');
   try {
-    const [source, glb] = await Promise.all([fetchFile(entry, 'source.png'), fetchFile(entry, 'model.glb')]);
+    // S10: wpis ze szkieletem otwieramy z rigged.glb (ta sama siatka + kości i wagi skórowania)
+    const [source, glb] = await Promise.all([fetchFile(entry, 'source.png'), fetchFile(entry, entry.rigged ? 'rigged.glb' : 'model.glb')]);
     await setSource(source);
     resetModel();
     state.baseName = safeName(entry.name);
@@ -1619,6 +1642,9 @@ const FEATURE_UI = {
   multiview: { api: '/api/multiview', check: checkMultiview, info: () => mvInfo,
     done: () => t('Funkcja „Lepszy tył obiektu” jest gotowa. W zakładce Model pojawił się wybór silnika 3D.'),
     note: () => t('Licencja: wagi modelu Zero123++ są na licencji CC-BY-NC 4.0 (bez użycia w produktach komercyjnych); wygenerowane modele i sprite\'y możesz wykorzystywać dowolnie.') },
+  rigging: { api: '/api/rigging', check: () => checkRigging(), info: () => rigInfo,
+    done: () => t('Funkcja „Szkielet i animacje” jest gotowa. W zakładce Model pojawił się przycisk „Utwórz szkielet”.'),
+    note: () => t('Instaluje własny Python 3.11 z Blenderem (bpy) i UniRig (MIT) – ok. 10 GB.') },
 };
 
 /** Przycisk „Zainstaluj” w oknie „Sprzęt i zaawansowane AI” + pasek postępu pobierania. */
@@ -1663,6 +1689,165 @@ function featureInstallControls(key, feature) {
   out.push(wrap);
   return out;
 }
+
+// ---------- S10: szkielet i animacje (UniRig na serwerze, klipy proceduralne w rig.js) ----------
+let rigInfo = null;
+
+function renderRigUi() {
+  const installed = !!rigInfo?.installed;
+  $('rigBlock').hidden = !installed;
+  const has = !!state.rig;
+  $('rigTypeRow').hidden = has;
+  $('btnRig').hidden = has;
+  $('animClipRow').hidden = !has;
+  $('animFrameRow').hidden = !state.action;
+  $('animSheetBlock').hidden = !state.action;
+  if (has) $('rigStatus').textContent = state.rig.humanoid
+    ? t('Szkielet postaci ({n} kości) – wybierz animację.', { n: state.rig.bones.length })
+    : t('Szkielet ogólny ({n} kości) – dostępne animacje ogólne.', { n: state.rig.bones.length });
+}
+
+async function checkRigging() {
+  try { rigInfo = await (await fetch('/api/rigging')).json(); renderRigUi(); } catch { /* serwer niedostępny */ }
+  return rigInfo;
+}
+
+/** Po wczytaniu GLB: czy ma szkielet? Jeśli tak – mixer i lista klipów (bez animacji na start). */
+function setupRig() {
+  clearRig();
+  state.rig = findRig(state.model);
+  if (state.rig) {
+    state.mixer = new THREE.AnimationMixer(state.model);
+    const sel = $('animClip');
+    sel.replaceChildren(...['none', ...clipNames(state.rig)].map((n) => Object.assign(document.createElement('option'), { value: n, textContent: t(CLIP_LABELS[n]) })));
+    sel.value = 'none';
+  }
+  renderRigUi();
+}
+
+function clearRig() {
+  if (state.mixer) state.mixer.stopAllAction();
+  state.rig = state.mixer = state.action = null;
+  if ($('rigBlock')) { $('animClip').value = 'none'; renderRigUi(); }
+}
+
+/** Czas klatki wybranej suwakiem (sprite'y i arkusz kierunków). */
+function clipFrameTime() {
+  if (!state.action) return 0;
+  const n = num('clipFrames');
+  return (Math.min(num('animFrame'), n - 1) / n) * state.action.getClip().duration;
+}
+
+/** Ustawia pozę klipu w chwili t (dla renderu sprite'ów – niezależnie od odtwarzania w podglądzie 3D). */
+function applyClipPose(t) {
+  if (!state.mixer || !state.action) return;
+  state.action.paused = false;
+  state.mixer.setTime(t);
+  scene.updateMatrixWorld(true);
+  for (const m of state.rig.skinned) m.skeleton.update();
+}
+
+function selectClip(name) {
+  if (!state.rig) return;
+  if (state.mixer) state.mixer.stopAllAction();
+  state.action = null;
+  resetPose(state.rig);
+  if (name !== 'none') {
+    const clip = buildClip(state.rig, name);
+    if (clip) {
+      state.action = state.mixer.clipAction(clip);
+      state.action.setLoop(THREE.LoopRepeat, Infinity).play();
+    }
+  }
+  // animacja ruchu wyklucza symetrię i woksele (liczone z pozy spoczynkowej) – wracamy do zwykłej bryły
+  if (state.action) {
+    if ($('symmetry').value !== 'off') { $('symmetry').value = 'off'; }
+    if ($('voxelMode').value === 'on') { $('voxelMode').value = 'off'; }
+    updateOrientation();
+  }
+  $('animFrame').max = num('clipFrames') - 1;
+  if (num('animFrame') > num('clipFrames') - 1) $('animFrame').value = 0;
+  $('animFrameOut').textContent = `${num('animFrame') + 1}/${num('clipFrames')}`;
+  renderRigUi();
+  scheduleRefresh();
+}
+
+$('animClip').addEventListener('input', () => { selectClip($('animClip').value); markDirty(); });
+$('animFrame').addEventListener('input', () => {
+  $('animFrameOut').textContent = `${num('animFrame') + 1}/${num('clipFrames')}`;
+  scheduleRefresh();
+});
+$('clipFrames').addEventListener('input', () => {
+  $('animFrame').max = num('clipFrames') - 1;
+  if (num('animFrame') > num('clipFrames') - 1) $('animFrame').value = 0;
+  $('animFrameOut').textContent = `${num('animFrame') + 1}/${num('clipFrames')}`;
+  scheduleRefresh();
+});
+
+/** „Utwórz szkielet”: serwer (UniRig) → rigged.glb w galerii → wczytanie zamiast zwykłego modelu. */
+async function rigModel() {
+  if (!state.model || !state.glbBlob || document.body.classList.contains('busy')) return;
+  setBusy(true);
+  setStatus('rigStatus', t('Szkielet (AI)… to potrwa około minuty.'), 'busy');
+  try {
+    // model wczytany z pliku .glb nie ma jeszcze wpisu w galerii – szkielet zapisujemy przy wpisie
+    if (!state.libraryId) state.libraryId = await createEntry(state.glbBlob, state.sourceBlob, null, state.baseName);
+  } catch (e) {
+    setStatus('rigStatus', e.message, 'err');
+    setBusy(false);
+    return;
+  }
+  const poll = setInterval(async () => {
+    try {
+      const s = await (await fetch('/api/status')).json();
+      if (s.stage !== 'idle') setStatus('rigStatus', `${s.stage} – ${Math.round(s.elapsed)} s`, 'busy');
+    } catch { /* serwer zajęty */ }
+  }, 1000);
+  try {
+    const form = new FormData();
+    form.append('humanoid', $('rigType').value === 'humanoid');
+    const res = await postRaw(`/api/library/${state.libraryId}/rig`, form);
+    const blob = await res.blob();
+    state.glbBlob = blob;
+    await loadGlb(await blob.arrayBuffer());
+    setStatus('rigStatus', '');
+    renderRigUi();
+    refreshRecent();
+    toast(t('Szkielet gotowy – wybierz animację w zakładce Model.'));
+  } catch (e) {
+    setStatus('rigStatus', e.message, 'err');
+  } finally {
+    clearInterval(poll);
+    setBusy(false);
+  }
+}
+$('btnRig').addEventListener('click', rigModel);
+
+/** Arkusz animacji: wiersz = kierunek, kolumna = klatka ruchu. */
+async function exportAnimSheet() {
+  if (!state.action || !state.sprites.length) return;
+  const n = num('clipFrames'), scale = num('exportScale'), yaws = directions();
+  const dur = state.action.getClip().duration;
+  setStatus('animSheetStatus', t('Renderowanie {n} klatek × {d} kierunków…', { n, d: yaws.length }), 'busy');
+  await new Promise((r) => setTimeout(r, 30));
+  try {
+    const columns = [];
+    for (let i = 0; i < n; i++) columns.push(renderSprites(yaws, (i / n) * dur).sprites);
+    applyClipPose(clipFrameTime());
+    const w = columns[0][0].width * scale, h = columns[0][0].height * scale;
+    const sheet = document.createElement('canvas');
+    sheet.width = w * n; sheet.height = h * yaws.length;
+    const ctx = sheet.getContext('2d');
+    columns.forEach((col, i) => col.forEach((img, j) => ctx.drawImage(spriteCanvas(img, scale), i * w, j * h)));
+    const clip = state.action.getClip().name;
+    download(await canvasBlob(sheet), `${state.baseName}_${sizeTag()}_${clip}_${n}klatek_${yaws.length}kier.png`);
+    setStatus('animSheetStatus', t('Zapisano arkusz {w}×{h} px.', { w: sheet.width, h: sheet.height }));
+  } catch (e) {
+    setStatus('animSheetStatus', e.message, 'err');
+  }
+}
+$('btnExportAnimSheet').addEventListener('click', exportAnimSheet);
+checkRigging();
 
 // ---------- Motyw jasny / ciemny ----------
 // Dopóki użytkownik nie kliknie, motyw idzie za ustawieniem Windows; kliknięcie zapisuje wybór na stałe.

@@ -32,7 +32,8 @@ FEATURES = {
     "rigging": {
         "name": "Szkielet i animacje ruchu",
         "description": "Automatyczny szkielet postaci i gotowe animacje (chodzenie, bieg, atak).",
-        "vram": 8, "ram": 16, "disk": 10,
+        # UniRig we własnym Pythonie 3.11 (~4 GB) + wagi 5,5 GB + pliki tymczasowe
+        "vram": 8, "ram": 16, "disk": 15,
     },
 }
 

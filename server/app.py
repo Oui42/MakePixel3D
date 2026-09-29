@@ -40,6 +40,7 @@ import capabilities  # noqa: E402
 import library  # noqa: E402
 import multiview  # noqa: E402
 import reconstruct  # noqa: E402
+import rigging  # noqa: E402
 import settings  # noqa: E402
 import text2image  # noqa: E402
 import updater  # noqa: E402
@@ -78,6 +79,8 @@ def api_status():
     st = reconstruct.status
     if multiview.status["generating"]:   # S9: silnik InstantMesh ma własne etapy
         st = multiview.status
+    if rigging.status["generating"]:     # S10: szkielet (UniRig)
+        st = rigging.status
     elapsed = time.time() - st["started"] if st["started"] and st["stage"] != "idle" else 0
     dev, dev_name = reconstruct.device_if_ready()   # None, dopóki PyTorch wczytuje się w tle
     return {
@@ -243,6 +246,41 @@ def api_multiview_install():
         raise HTTPException(409, tr("Ten komputer nie spełnia wymagań: {why}", why="; ".join(feat["reasons"])))
     multiview.install_in_background()
     return {**multiview.summary(), "available": True, "reasons": []}
+
+
+# ---------- S10: szkielet i animacje (UniRig we własnym Pythonie 3.11, instalowany na żądanie) ----------
+@app.get("/api/rigging")
+def api_rigging_status():
+    feat = capabilities.features()["rigging"]
+    return {**rigging.summary(), "available": feat["available"], "reasons": feat["reasons"]}
+
+
+@app.post("/api/rigging/install")
+def api_rigging_install():
+    feat = capabilities.features()["rigging"]
+    if not feat["available"]:
+        raise HTTPException(409, tr("Ten komputer nie spełnia wymagań: {why}", why="; ".join(feat["reasons"])))
+    rigging.install_in_background()
+    return {**rigging.summary(), "available": True, "reasons": []}
+
+
+@app.post("/api/library/{entry_id}/rig")
+async def api_library_rig(entry_id: str, humanoid: bool = Form(False)):
+    """Szkielet + wagi skórowania dla modelu z galerii → rigged.glb w tym samym wpisie (zwracany też w odpowiedzi)."""
+    try:
+        glb = library.file_path(entry_id, "model.glb").read_bytes()
+    except KeyError:
+        raise HTTPException(404, tr("Nie ma takiego wpisu w galerii."))
+    if not rigging.installed():
+        raise HTTPException(409, tr("Funkcja „Szkielet i animacje” nie jest zainstalowana."))
+    try:
+        rigged = await anyio.to_thread.run_sync(rigging.rig, glb, humanoid)
+    except Exception as exc:  # noqa: BLE001
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(500, tr("Błąd tworzenia szkieletu: {exc}", exc=exc))
+    library.save_rigged(entry_id, rigged, humanoid)
+    return Response(rigged, media_type="model/gltf-binary")
 
 
 @app.get("/api/capabilities")

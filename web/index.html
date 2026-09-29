@@ -149,6 +149,27 @@
               <input id="voxelRes" type="range" min="8" max="96" step="4" value="32">
             </div>
             <button id="btnSaveGlb" class="block" disabled>Zapisz model (.glb)</button>
+            <!-- S10: szkielet i animacje (widoczne, gdy funkcja zaawansowana jest zainstalowana) -->
+            <div id="rigBlock" hidden>
+              <h3>Szkielet i animacje</h3>
+              <div class="row" id="rigTypeRow">
+                <label for="rigType" title="Postać: kości nazwane jak u ludzi (biodra, ręce, nogi) – działają gotowe animacje chodu, biegu i ataku. Inny obiekt: szkielet ogólny – tylko kołysanie i podskok.">Rodzaj</label>
+                <select id="rigType" data-seg>
+                  <option value="humanoid" data-label="Postać" title="Człowiek, humanoid, zwierzę stojące na dwóch nogach" selected>postać</option>
+                  <option value="generic" data-label="Inny" title="Przedmiot, pojazd, zwierzę, roślina">inny obiekt</option>
+                </select>
+              </div>
+              <button id="btnRig" class="block" type="button" title="AI przewiduje szkielet i wagi skórowania (UniRig) – około minuty">Utwórz szkielet (AI, ok. 1 min)</button>
+              <p id="rigStatus" class="status"></p>
+              <div class="row" id="animClipRow" hidden>
+                <label for="animClip" title="Animacja pozuje model; sprite'y i arkusz pokazują wybraną klatkę, a okno „Animacja” gra cały ruch">Animacja</label>
+                <select id="animClip"><option value="none">Bez animacji</option></select>
+              </div>
+              <div class="row slider" id="animFrameRow" hidden>
+                <label for="animFrame" title="Która klatka ruchu trafia do sprite'ów i arkusza kierunków">Klatka <output id="animFrameOut"></output></label>
+                <input id="animFrame" type="range" min="0" max="7" step="1" value="0">
+              </div>
+            </div>
           </div>
         </section>
       </div>
@@ -350,6 +371,18 @@
             </div>
             <button id="btnExportGif" disabled>Zapisz animację GIF</button>
             <p id="gifStatus" class="status"></p>
+            <!-- S10: arkusz animacji (kierunki w wierszach, klatki ruchu w kolumnach) – tylko przy wybranej animacji -->
+            <div id="animSheetBlock" hidden>
+              <h3>Arkusz animacji</h3>
+              <div class="row">
+                <label for="clipFrames" title="Liczba klatek ruchu w jednym wierszu arkusza (i w animacji)">Klatki ruchu</label>
+                <select id="clipFrames" data-seg>
+                  <option value="4">4</option><option value="6">6</option><option value="8" selected>8</option><option value="12">12</option>
+                </select>
+              </div>
+              <button id="btnExportAnimSheet" type="button" title="PNG: każdy kierunek w osobnym wierszu, klatki ruchu w kolumnach">Zapisz arkusz animacji</button>
+              <p id="animSheetStatus" class="status"></p>
+            </div>
           </div>
         </section>
       </div>
