@@ -37,7 +37,7 @@ export const PRESETS = {
 
 // Pola zapamiętywane między uruchomieniami (bez korekt konkretnego modelu, np. obrotu „przodu”)
 export const SAVED_FIELDS = [
-  'objectKind', 'armsDown', 'removeBg', 'quality', 'symmetry', 'voxelMode', 'voxelRes', 'dirCount', 'pitch', 'zoom', 'anchor', 'size', 'aspect', 'sampling',
+  'objectKind', 'armsDown', 'showBones', 'removeBg', 'quality', 'symmetry', 'voxelMode', 'voxelRes', 'dirCount', 'pitch', 'zoom', 'anchor', 'size', 'aspect', 'sampling',
   'paletteMode', 'colors', 'dither', 'saturation', 'contrast', 'brightness', 'threshold', 'outline',
   'outlineColor', 'shadowOpacity', 'shadowColorMode', 'shadowColor', 'lighting', 'matchPhoto', 'removeOrphans', 'exportScale', 'animFrames', 'gifDuration',
 ];

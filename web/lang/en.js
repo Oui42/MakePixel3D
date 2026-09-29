@@ -32,6 +32,8 @@ export const EN = {
   'Uwaga: obiekt dotyka krawędzi obrazu – może być ucięty. Model 3D będzie miał w tym miejscu płaską ścianę.':
     'Warning: the object touches the image edge – it may be cut off. The 3D model will have a flat wall there.',
   'Ręce w dół (zamiast T-pozy)': 'Arms down (instead of a T-pose)',
+  'Pokaż szkielet na podglądzie': 'Show the skeleton in the preview',
+  "Linie kości na podglądzie 3D (tylko podgląd – nie trafiają do sprite'ów)": "Bone lines in the 3D preview (preview only – they never appear in the sprites)",
   'Postać z obrazu stoi w T-pozie (ręce w bok) – ta opcja opuszcza ramiona wzdłuż tułowia w pozie spoczynkowej i we wszystkich animacjach':
     'A character from an image stands in a T-pose (arms out) – this option lowers the arms along the body in the rest pose and in all animations',
   'Rodzaj': 'Type',

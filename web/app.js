@@ -54,6 +54,7 @@ const state = {
 
 // Animacja obrotu (osobne, gęstsze klatki – te same co w eksporcie GIF)
 const anim = { frames: [], index: 0, timer: 0, buildTimer: 0, paused: false };
+let boneHelper = null;   // S10: THREE.SkeletonHelper na podglądzie (updateBoneHelper)
 
 // ---------- Scena: pivot (obrót „przodu”) → tilt (przewrócenie) → norm (środek i skala) → model ----------
 const scene = new THREE.Scene();
@@ -343,6 +344,7 @@ function updateOrientation() {
   const pts = fitPoints();
   grid.position.y = minY(pts);        // podłoga siatki pod modelem
   fitShadow(pts);
+  updateBoneHelper();                 // symetria/woksele chowają model – wtedy bez linii szkieletu
   scheduleRefresh();
 }
 
@@ -600,6 +602,7 @@ function selectDir(i) {
   [...$('strip').children].forEach((el, k) => el.classList.toggle('sel', k === state.dirIndex));
   drawSelected();
   updateEditButtons();
+  if (state.action) buildAnimFrames();   // S10: okno „Animacja” gra klip dla WYBRANEGO kierunku – przebudowa po zmianie
 }
 
 function drawPalette(palette) {
@@ -1746,6 +1749,8 @@ function renderRigUi() {
   $('btnRig').hidden = has;
   $('animClipRow').hidden = !has;
   $('armsDownRow').hidden = !(has && state.rig.humanoid);
+  $('showBonesRow').hidden = !has;
+  updateBoneHelper();
   $('animFrameRow').hidden = !state.action;
   $('animSheetBlock').hidden = !state.action;
   if (has) $('rigStatus').textContent = state.rig.humanoid
@@ -1780,9 +1785,22 @@ $('armsDown').addEventListener('input', () => {
   markDirty();
 });
 
+// Linie szkieletu na podglądzie 3D: THREE.SkeletonHelper na WARSTWIE 1 (jak siatka podłogi – kamera sprite'ów jej nie widzi),
+// rysowany zawsze na wierzchu (materiał helpera nie testuje głębi). Ukryty, gdy model zastępuje symetria albo woksele.
+function updateBoneHelper() {
+  if (boneHelper) { scene.remove(boneHelper); boneHelper.dispose(); boneHelper = null; }
+  if (!state.rig || !$('showBones').checked || !state.model?.visible) return;
+  boneHelper = new THREE.SkeletonHelper(state.model);
+  boneHelper.material.linewidth = 2;
+  boneHelper.layers.set(1);
+  scene.add(boneHelper);
+}
+$('showBones').addEventListener('input', updateBoneHelper);
+
 function clearRig() {
   if (state.mixer) state.mixer.stopAllAction();
   state.rig = state.mixer = state.action = null;
+  updateBoneHelper();
   if ($('rigBlock')) { $('animClip').value = 'none'; renderRigUi(); }
 }
 
