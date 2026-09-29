@@ -40,8 +40,10 @@ TOTAL_MB = TRANSFORMER[2] + T5[2] + 500
 COMMON_SUFFIX = ", isolated on a plain white background, nothing else in the frame, soft even lighting, game asset concept art, high detail"
 KINDS = {
     "character": {
-        "prefix": "full body character standing in a T-pose with both arms stretched straight out horizontally, legs straight and slightly apart, ",
-        "suffix": ", the whole figure is visible from the top of the head to the soles of the feet with empty space above the head and below the feet, front view, facing the camera, neutral expression" + COMMON_SUFFIX,
+        # standardowa T-poza z gier: ramiona PROSTE na wysokość barków, dłonie płasko w dół – bez zgiętych łokci i uniesionych
+        # dłoni (zgłoszenie użytkownika 29.09.2026); najważniejsze na początku, bo CLIP czyta tylko pierwsze 77 tokenów
+        "prefix": "game character reference sheet, standard T-pose: standing upright, both arms stretched straight out horizontally to the left and to the right in line with the shoulders, elbows locked straight, palms facing down, fingers together pointing sideways, legs straight and slightly apart, feet flat on the ground, ",
+        "suffix": ", full body from the top of the head to the soles of the feet with empty space above the head and below the feet, front view, facing the camera, symmetrical, neutral expression" + COMMON_SUFFIX,
         "size": (832, 1216),
     },
     "creature": {

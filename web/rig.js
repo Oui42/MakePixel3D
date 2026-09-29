@@ -18,14 +18,93 @@ export function findRig(root) {
   if (!skinned.length) return null;
   const bones = skinned[0].skeleton.bones;
   const byName = new Map(bones.map((b) => [b.name, b]));
-  const humanoid = byName.has(V.hips) && (byName.has(V.lUpperLeg) || byName.has(V.lUpperArm));
+  let humanoid = byName.has(V.hips) && (byName.has(V.lUpperLeg) || byName.has(V.lUpperArm));
+  let inferred = false;
+  if (!humanoid) {
+    // kości bez nazw VRoid (bone_N) – próbujemy rozpoznać budowę postaci po strukturze szkieletu
+    const alias = inferHumanoid(bones, root);
+    if (alias) {
+      for (const [name, bone] of alias) byName.set(name, bone);   // nazwy VRoid jako aliasy prawdziwych kości
+      humanoid = inferred = true;
+    }
+  }
   const roots = bones.filter((b) => !b.parent?.isBone);
   // wysokość modelu (jednostki modelu) – do przesunięć w klipach ogólnych
   const box = new THREE.Box3();
   for (const m of skinned) { m.geometry.computeBoundingBox(); box.union(m.geometry.boundingBox); }
   const height = box.getSize(new THREE.Vector3()).y || 1;
   const rest = snapshotRest(bones);
-  return { skinned, bones, byName, humanoid, roots, height, rest, restT: rest, armsDown: false };
+  return { skinned, bones, byName, humanoid, inferred, roots, height, rest, restT: rest, armsDown: false };
+}
+
+/**
+ * Rozpoznanie humanoida po STRUKTURZE szkieletu (UniRig dla części postaci oddaje kości bone_N bez szablonu VRoid, np.
+ * rycerz z InstantMesh 29.09.2026: ramiona po 7 kości, nogi po 4). Szukamy: korzeń (biodra) → łańcuch kręgosłupa w górę,
+ * z niego dwie boczne gałęzie (ręce; lewa/prawa po znaku X), z bioder dwie gałęzie w dół (nogi). Zwraca Map nazwa VRoid
+ * → kość (tylko kości używane przez klipy) albo null, gdy budowa nie pasuje. Pozycje w układzie modelu (Y w górę).
+ */
+function inferHumanoid(bones, root) {
+  root.updateWorldMatrix(true, true);
+  const inv = root.matrixWorld.clone().invert();
+  const pos = new Map(bones.map((b) => [b, b.getWorldPosition(new THREE.Vector3()).applyMatrix4(inv)]));
+  let lo = Infinity, hi = -Infinity;
+  for (const p of pos.values()) { lo = Math.min(lo, p.y); hi = Math.max(hi, p.y); }
+  const h = hi - lo || 1;
+  const kids = (b) => b.children.filter((c) => c.isBone);
+  const count = (b) => kids(b).reduce((s, c) => s + 1 + count(c), 0);
+  const biggest = (list) => list.reduce((a, b) => (count(b) > count(a) ? b : a));
+  // łańcuch od kości w dół drzewa – zawsze po dziecku z największym poddrzewem
+  const chain = (b) => { const out = [b]; let c = kids(b); while (c.length) { const n = biggest(c); out.push(n); c = kids(n); } return out; };
+  const roots = bones.filter((b) => !b.parent?.isBone);
+  if (!roots.length) return null;
+  const hips = biggest(roots);
+  const hipsY = pos.get(hips).y;
+  // nogi: dzieci bioder, których łańcuch schodzi wyraźnie poniżej bioder
+  const legs = kids(hips).filter((c) => chain(c).some((b) => pos.get(b).y < hipsY - 0.08 * h));
+  const others = kids(hips).filter((c) => !legs.includes(c));
+  if (legs.length < 2 || !others.length) return null;
+  // kręgosłup: w górę aż do węzła z dwiema bocznymi gałęziami (ręce)
+  const spine = [hips];
+  let node = biggest(others), arms = null, above = [];
+  for (let guard = 0; guard < 32 && node; guard++) {
+    spine.push(node);
+    const c = kids(node);
+    // gałąź boczna = do pierwszego rozgałęzienia sięga wyraźnie w bok (sam bark leży blisko kręgosłupa, więc test na
+    // pierwszej kości nie wystarcza; a łańcuch po największym poddrzewie skręcałby z kręgosłupa w rękę)
+    const reach = (k) => { let m = 0, n = k; for (let g = 0; g < 32 && n; g++) { m = Math.max(m, Math.abs(pos.get(n).x - pos.get(node).x)); const kk = kids(n); n = kk.length === 1 ? kk[0] : null; } return m; };
+    const side = c.filter((k) => reach(k) > 0.1 * h);
+    const rest = c.filter((k) => !side.includes(k));
+    if (side.length >= 2) { arms = side; above = rest; break; }
+    node = rest.length ? biggest(rest) : null;
+  }
+  if (!arms) return null;
+  const chest = spine.at(-1);
+  const cx = pos.get(chest).x;
+  const armL = arms.find((a) => pos.get(a).x > cx), armR = arms.find((a) => pos.get(a).x < cx);
+  const hx = pos.get(hips).x;
+  const legL = legs.find((l) => pos.get(l).x >= hx), legR = legs.find((l) => pos.get(l).x < hx);
+  if (!armL || !armR || !legL || !legR) return null;
+  const up = above.length ? chain(biggest(above)) : [];   // dalej w górę od klatki: szyja, głowa
+  const out = new Map();
+  const set = (name, bone) => { if (bone) out.set(name, bone); };
+  set(V.hips, hips);
+  set(V.spine, spine[1] !== chest ? spine[1] : null);
+  set(V.chest, chest);
+  set(V.neck, up.length > 1 ? up[0] : null);
+  set(V.head, up.at(-1));
+  // ramię: przy 4+ kościach pierwsza to bark, potem ramię, przedramię; przy 2–3 – od razu ramię, przedramię
+  for (const [start, upper, lower] of [[armL, V.lUpperArm, V.lLowerArm], [armR, V.rUpperArm, V.rLowerArm]]) {
+    const c = chain(start);
+    if (c.length < 2) return null;
+    const k = c.length >= 4 ? 1 : 0;
+    set(upper, c[k]); set(lower, c[k + 1]);
+  }
+  for (const [start, upper, lower, foot] of [[legL, V.lUpperLeg, V.lLowerLeg, V.lFoot], [legR, V.rUpperLeg, V.rLowerLeg, V.rFoot]]) {
+    const c = chain(start);
+    if (c.length < 2) return null;
+    set(upper, c[0]); set(lower, c[1]); set(foot, c[2]);
+  }
+  return out;
 }
 
 /** Obrót w przestrzeni MODELU (bez obrotów sceny) złożony z obrotów przodków kości aż do `root` (bez root). */
@@ -52,14 +131,14 @@ export function setArmsDown(rig, root, on) {
   for (const [upper, lower] of [[V.lUpperArm, V.lLowerArm], [V.rUpperArm, V.rLowerArm]]) {
     const bone = rig.byName.get(upper), child = rig.byName.get(lower);
     if (!bone || !child) continue;
-    const restQ = rig.restT.get(upper).q;
+    const restQ = rig.restT.get(bone.name).q;
     const parentQ = ancestorsQuat(bone, root);
     // kierunek ramienia w przestrzeni modelu (od barku do łokcia) – decyduje o zwrocie obrotu
     const dir = child.position.clone().applyQuaternion(restQ).applyQuaternion(parentQ);
     const sign = dir.x >= 0 ? -1 : 1;
     const axisLocal = new THREE.Vector3(0, 0, 1).applyQuaternion(parentQ.clone().invert());   // oś Z modelu w przestrzeni rodzica
     const delta = new THREE.Quaternion().setFromAxisAngle(axisLocal, sign * deg(ARMS_DOWN_DEG));
-    rig.rest.set(upper, { q: delta.multiply(restQ), p: rig.restT.get(upper).p });
+    rig.rest.set(bone.name, { q: delta.multiply(restQ), p: rig.restT.get(bone.name).p });
   }
 }
 
@@ -86,7 +165,7 @@ const deg = THREE.MathUtils.degToRad;
 function rotTrack(rig, name, times, angles) {
   const bone = rig.byName.get(name);
   if (!bone) return null;
-  const rest = rig.rest.get(name).q;
+  const rest = rig.rest.get(bone.name).q;   // rest jest po PRAWDZIWEJ nazwie kości (nazwy VRoid mogą być aliasami)
   const values = [];
   const e = new THREE.Euler(), q = new THREE.Quaternion();
   for (const [x, y, z] of angles) {
@@ -100,7 +179,7 @@ function rotTrack(rig, name, times, angles) {
 function posTrack(rig, name, times, offsets) {
   const bone = rig.byName.get(name);
   if (!bone) return null;
-  const rest = rig.rest.get(name).p;
+  const rest = rig.rest.get(bone.name).p;
   const values = [];
   for (const [x, y, z] of offsets) values.push(rest.x + x, rest.y + y, rest.z + z);
   return new THREE.VectorKeyframeTrack(`${bone.name}.position`, times, values);

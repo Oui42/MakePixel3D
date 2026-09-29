@@ -363,8 +363,19 @@ def _step(args: list[str], cwd: Path, expect: Path | None = None) -> str:
     return out
 
 
-SKELETON_SEEDS = (12345, 1, 2, 3)   # generowanie szkieletu losuje tokeny – gdy wynik jest niepoprawny, próbujemy inne ziarno
+SKELETON_SEEDS = (12345, 1)   # generowanie losuje tokeny – 2 próby (~20 s każda); potem szkielet ogólny, którego budowę
+                              # postaci rozpoznaje przeglądarka (rig.js inferHumanoid) – dłuższe czekanie zgłosił użytkownik
 NOT_ENOUGH_BONES = "more than existing bones"   # komunikat UniRig (src/data/order.py), gdy szablon nazw (vroid) nie pasuje
+VROID_MARK = b"J_Bip_C_Hips"   # nazwa kości VRoid w FBX – dowód, że szablon nazw postaci został zastosowany
+
+
+def _is_humanoid_fbx(path: Path) -> bool:
+    """Klasa vroid czasem oddaje szkielet BEZ nazw VRoid (bone_N – model nie wygenerował tokenów części ciała, np. 22 kości
+    dla rycerza z InstantMesh, 29.09.2026) – taki plik dla postaci traktujemy jak nieudaną próbę."""
+    try:
+        return VROID_MARK in path.read_bytes()
+    except OSError:
+        return False
 
 
 def _predict_skeleton(src: Path, skel: Path, npz: Path, humanoid: bool) -> bool:
@@ -381,10 +392,12 @@ def _predict_skeleton(src: Path, skel: Path, npz: Path, humanoid: bool) -> bool:
             try:
                 _step([str(PY), str(RUNNER), "run.py", "--task", task, "--seed", str(seed), "--input", str(src),
                        "--output", str(skel), "--npz_dir", str(npz)], CODE_DIR, expect=skel)
+                if is_humanoid and not _is_humanoid_fbx(skel):
+                    raise RuntimeError("skeleton without VRoid bone names")
                 return is_humanoid
             except RuntimeError as exc:
                 last = exc
-                if NOT_ENOUGH_BONES not in str(exc) and skel.is_file():
+                if NOT_ENOUGH_BONES not in str(exc) and "VRoid" not in str(exc) and skel.is_file():
                     raise
                 print(f"[rigging] szkielet (ziarno {seed}, {task}) nie powstał: {exc}", flush=True)
         if is_humanoid:

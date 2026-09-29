@@ -1956,7 +1956,7 @@ function renderRigUi() {
   $('animFrameRow').hidden = !state.action;
   $('animSheetBlock').hidden = !state.action;
   if (has) $('rigStatus').textContent = state.rig.humanoid
-    ? t('Szkielet postaci ({n} kości) – wybierz animację.', { n: state.rig.bones.length })
+    ? t(state.rig.inferred ? 'Szkielet postaci rozpoznany po budowie ({n} kości) – wybierz animację.' : 'Szkielet postaci ({n} kości) – wybierz animację.', { n: state.rig.bones.length })
     : t('Szkielet ogólny ({n} kości) – dostępne animacje ogólne.', { n: state.rig.bones.length });
 }
 
@@ -2087,7 +2087,7 @@ async function rigModel() {
     await loadGlb(await blob.arrayBuffer());
     state.glbFile = 'rigged.glb';
     refreshRecent();
-    if (res.headers.get('X-Rig-Fallback') === '1') {
+    if (res.headers.get('X-Rig-Fallback') === '1' && !state.rig?.humanoid) {   // rig.js mógł rozpoznać budowę po strukturze
       // model nie dał kompletu kości postaci (VRoid) – jest szkielet ogólny, więc tylko animacje ogólne
       setStatus('rigStatus', t('Nie udało się rozpoznać budowy postaci – utworzono szkielet ogólny (animacje: kołysanie, podskok).'), 'err');
     } else {
