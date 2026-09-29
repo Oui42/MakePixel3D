@@ -23,12 +23,13 @@ async function send(url, method, form) {
 }
 
 /** Nowy wpis dla modelu spoza galerii (np. wczytanego z pliku .glb). Zwraca id. */
-export async function createEntry(modelBlob, sourceBlob, thumbBlob, name) {
+export async function createEntry(modelBlob, sourceBlob, thumbBlob, name, kind = null) {
   const form = new FormData();
   form.append('model', modelBlob, 'model.glb');
   if (sourceBlob) form.append('source', sourceBlob, 'source.png');
   if (thumbBlob) form.append('thumb', thumbBlob, 'thumb.png');
   form.append('name', name);
+  if (kind) form.append('kind', kind);
   return (await send('/api/library', 'POST', form)).id;
 }
 

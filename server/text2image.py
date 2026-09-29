@@ -34,8 +34,40 @@ TRANSFORMER = ("city96/FLUX.1-schnell-gguf", "flux1-schnell-Q4_K_S.gguf", 6780)
 T5 = ("city96/t5-v1_1-xxl-encoder-gguf", "t5-v1_1-xxl-encoder-Q5_K_S.gguf", 3290)
 TOTAL_MB = TRANSFORMER[2] + T5[2] + 500
 
-# Dopisek do opisu użytkownika: obiekt w całości, na jednolitym tle – tak, żeby usuwanie tła i model 3D miały łatwo.
-PROMPT_SUFFIX = ", full view of the whole object, centered, isolated on a plain white background, soft even lighting, game asset concept art, high detail"
+# Dopisek do opisu użytkownika zależny od RODZAJU obiektu (wybór w zakładce Źródło): obiekt w całości, na jednolitym
+# tle – tak, żeby usuwanie tła i model 3D miały łatwo. Postać: T-poza, cała sylwetka ze stopami (potrzebna do szkieletu
+# i animacji), format PIONOWY – w kwadracie nogi często były ucięte. Budynek/przedmiot: widok trzy czwarte (lepszy tył).
+COMMON_SUFFIX = ", isolated on a plain white background, nothing else in the frame, soft even lighting, game asset concept art, high detail"
+KINDS = {
+    "character": {
+        "prefix": "full body character standing in a T-pose with both arms stretched straight out horizontally, legs straight and slightly apart, ",
+        "suffix": ", the whole figure is visible from the top of the head to the soles of the feet with empty space above the head and below the feet, front view, facing the camera, neutral expression" + COMMON_SUFFIX,
+        "size": (832, 1216),
+    },
+    "creature": {
+        "prefix": "full body ",
+        "suffix": ", the whole animal is visible including all legs, feet and tail, standing naturally, three-quarter view from the front, centered with empty space around it" + COMMON_SUFFIX,
+        "size": (1024, 1024),
+    },
+    "building": {
+        "prefix": "",
+        "suffix": ", the whole building is visible from the ground to the roof, three-quarter view from a front corner, slightly elevated camera, centered with empty space around it, no surrounding objects" + COMMON_SUFFIX,
+        "size": (1152, 896),
+    },
+    "object": {
+        "prefix": "",
+        "suffix": ", the whole object is visible, three-quarter view, centered with empty space around it" + COMMON_SUFFIX,
+        "size": (1024, 1024),
+    },
+}
+PROMPT_SUFFIX = KINDS["object"]["suffix"]   # zgodność: wywołania bez rodzaju
+
+
+def build_prompt(prompt: str, kind: str) -> tuple[str, int, int]:
+    """Pełny prompt i rozmiar obrazu dla rodzaju obiektu (nieznany rodzaj = przedmiot)."""
+    k = KINDS.get(kind) or KINDS["object"]
+    w, h = k["size"]
+    return k["prefix"] + prompt + k["suffix"], w, h
 
 status = {
     "installed": False, "installing": False, "progress": 0.0, "current": None, "error": None,
@@ -190,8 +222,9 @@ def _schedule_idle_unload():
     _idle_timer.start()
 
 
-def generate(prompt: str, seed: int | None = None, size: int = 1024, steps: int = 4) -> Image.Image:
-    """Opis → obraz RGB (kwadrat). Model 3D schodzi z karty na czas pracy."""
+def generate(prompt: str, seed: int | None = None, size: int = 0, steps: int = 4, kind: str = "object") -> Image.Image:
+    """Opis → obraz RGB. Rozmiar i dopisek do promptu zależą od rodzaju obiektu (KINDS); `size` > 0 wymusza kwadrat.
+    Model 3D schodzi z karty na czas pracy."""
     import torch
     import reconstruct
 
@@ -200,7 +233,9 @@ def generate(prompt: str, seed: int | None = None, size: int = 1024, steps: int 
         raise ValueError(tr("Wpisz, co ma przedstawiać obraz."))
     if not installed():
         raise RuntimeError(tr("Model tekst → obraz nie jest zainstalowany."))
-    size = max(512, min(1280, (size // 64) * 64))
+    full, width, height = build_prompt(prompt, kind)
+    if size:
+        width = height = max(512, min(1280, (size // 64) * 64))
     with _lock:
         status.update(generating=True, started=time.time(), error=None)
         try:
@@ -208,7 +243,7 @@ def generate(prompt: str, seed: int | None = None, size: int = 1024, steps: int 
             pipe = _load()
             _set_stage(tr("Generowanie obrazu…"))
             gen = torch.Generator("cpu").manual_seed(seed if seed is not None else int(time.time()) % 2**31)
-            image = pipe(prompt + PROMPT_SUFFIX, num_inference_steps=steps, guidance_scale=0.0, width=size, height=size,
+            image = pipe(full, num_inference_steps=steps, guidance_scale=0.0, width=width, height=height,
                          generator=gen).images[0]
             _set_stage("idle")
             return image.convert("RGB")

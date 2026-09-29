@@ -24,7 +24,43 @@ export function findRig(root) {
   const box = new THREE.Box3();
   for (const m of skinned) { m.geometry.computeBoundingBox(); box.union(m.geometry.boundingBox); }
   const height = box.getSize(new THREE.Vector3()).y || 1;
-  return { skinned, bones, byName, humanoid, roots, height, rest: snapshotRest(bones) };
+  const rest = snapshotRest(bones);
+  return { skinned, bones, byName, humanoid, roots, height, rest, restT: rest, armsDown: false };
+}
+
+/** Obrót w przestrzeni MODELU (bez obrotów sceny) złożony z obrotów przodków kości aż do `root` (bez root). */
+function ancestorsQuat(bone, root) {
+  const chain = [];
+  for (let o = bone.parent; o && o !== root; o = o.parent) chain.push(o);
+  const q = new THREE.Quaternion();
+  for (let i = chain.length - 1; i >= 0; i--) q.multiply(chain[i].quaternion);
+  return q;
+}
+
+const ARMS_DOWN_DEG = 72;   // ramiona z T-pozy (poziomo) prawie do tułowia
+
+/**
+ * „Ręce w dół”: modele z obrazu stoją w T-pozie, a klipy dodają obroty do pozy spoczynkowej – więc ręce zostawały w bok.
+ * Podmieniamy pozę spoczynkową ramion (rig.rest) na opuszczoną: obrót ramienia wokół osi przód–tył modelu (Z) w stronę
+ * podłoża, liczony w przestrzeni rodzica kości. Kierunek (lewa/prawa) bierzemy z faktycznego położenia przedramienia,
+ * więc nie zależy od tego, w którą stronę patrzy model. Potem trzeba ponownie zbudować klip (buildClip).
+ */
+export function setArmsDown(rig, root, on) {
+  rig.armsDown = !!on;
+  rig.rest = new Map(rig.restT);
+  if (!on) return;
+  for (const [upper, lower] of [[V.lUpperArm, V.lLowerArm], [V.rUpperArm, V.rLowerArm]]) {
+    const bone = rig.byName.get(upper), child = rig.byName.get(lower);
+    if (!bone || !child) continue;
+    const restQ = rig.restT.get(upper).q;
+    const parentQ = ancestorsQuat(bone, root);
+    // kierunek ramienia w przestrzeni modelu (od barku do łokcia) – decyduje o zwrocie obrotu
+    const dir = child.position.clone().applyQuaternion(restQ).applyQuaternion(parentQ);
+    const sign = dir.x >= 0 ? -1 : 1;
+    const axisLocal = new THREE.Vector3(0, 0, 1).applyQuaternion(parentQ.clone().invert());   // oś Z modelu w przestrzeni rodzica
+    const delta = new THREE.Quaternion().setFromAxisAngle(axisLocal, sign * deg(ARMS_DOWN_DEG));
+    rig.rest.set(upper, { q: delta.multiply(restQ), p: rig.restT.get(upper).p });
+  }
 }
 
 function snapshotRest(bones) {

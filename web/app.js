@@ -14,7 +14,7 @@ import { initSegmented, syncShortcutButtons } from './segmented.js';
 import { t, getLang, setLang, locale, translateDom } from './i18n.js';
 import { imageDataFromBlob, imageDataToBlob, cropToObject, MaskEditor } from './mask.js';
 import { PixelEditor } from './editor.js';
-import { findRig, resetPose, clipNames, buildClip, CLIP_LABELS } from './rig.js';
+import { findRig, resetPose, clipNames, buildClip, setArmsDown, CLIP_LABELS } from './rig.js';
 import {
   listEntries, fetchFile, renameEntry, deleteEntry, renderTiles, createEntry, saveProject, fetchProject,
 } from './gallery.js';
@@ -753,7 +753,7 @@ function setStage(stage) {
 /** Na czas usuwania tła / generowania blokujemy wszystko, co mogłoby podmienić zdjęcie lub model. */
 function setBusy(on) {
   document.body.classList.toggle('busy', on);
-  for (const id of ['file', 'glbFile', 'welcomePhoto', 'welcomeGlb', 'welcomeText', 'quality', 'engine', 'removeBg', 'btnMask', 'btnT2I', 't2iPrompt', 'btnRig', 'rigType']) $(id).disabled = on;
+  for (const id of ['file', 'glbFile', 'welcomePhoto', 'welcomeGlb', 'welcomeText', 'quality', 'engine', 'removeBg', 'btnMask', 'btnT2I', 't2iPrompt', 'btnRig', 'rigType', 'objectKind']) $(id).disabled = on;
   $('btnGenerate').disabled = on || !state.cutoutBlob;
 }
 
@@ -778,9 +778,16 @@ async function handleFile(file) {
     const form = new FormData();
     form.append('file', file);
     form.append('remove_bg', $('removeBg').checked);
-    await setSource(await post('/api/cutout', form));
+    const { touchesEdge } = await setSource(await post('/api/cutout', form));
     resetModel();   // nowe zdjęcie = nowy obiekt: stary model znika
-    setStatus('cutoutStatus', t('Gotowe. Teraz wygeneruj model 3D (zakładka Model).'));
+    if (touchesEdge) {
+      // obiekt dotyka krawędzi zdjęcia – najpewniej jest ucięty (dla postaci: brak stóp → zły model i szkielet)
+      setStatus('cutoutStatus', $('objectKind').value === 'character'
+        ? t('Uwaga: postać dotyka krawędzi obrazu – pewnie jest ucięta (np. stopy). Lepiej wygeneruj obraz ponownie (inne ziarno) albo użyj innego zdjęcia.')
+        : t('Uwaga: obiekt dotyka krawędzi obrazu – może być ucięty. Model 3D będzie miał w tym miejscu płaską ścianę.'), 'warn');
+    } else {
+      setStatus('cutoutStatus', t('Gotowe. Teraz wygeneruj model 3D (zakładka Model).'));
+    }
     setStatus('genStatus', '');
     setStage('photo');
     setTab('model');   // następny krok: „Generuj model 3D”
@@ -811,6 +818,18 @@ async function setSource(blob, { keepAiMask = false } = {}) {
   state.photoId++;
   $('cutoutThumb').src = URL.createObjectURL(state.cutoutBlob);
   $('cutoutThumb').hidden = false;
+  return { touchesEdge: maskTouchesEdge(data) };
+}
+
+/** Czy maska obiektu dotyka krawędzi zdjęcia (obiekt ucięty w kadrze)? Dolna krawędź liczy się zawsze, boczne
+ *  i górna – gdy dotyka ich wyraźny odcinek (kilka procent szerokości/wysokości), nie pojedynczy piksel. */
+function maskTouchesEdge(img) {
+  const { width: w, height: h, data } = img;
+  const on = (x, y) => data[(y * w + x) * 4 + 3] >= 128;
+  const count = (n, f) => { let c = 0; for (let i = 0; i < n; i++) if (f(i)) c++; return c; };
+  const bottom = count(w, (x) => on(x, h - 1)), top = count(w, (x) => on(x, 0));
+  const left = count(h, (y) => on(0, y)), right = count(h, (y) => on(w - 1, y));
+  return bottom > w * 0.01 || top > w * 0.03 || left > h * 0.03 || right > h * 0.03;
 }
 
 /** Obrót „przodu” i przewrócenie dotyczą konkretnego modelu – nowy model zaczyna od zera. */
@@ -899,6 +918,7 @@ async function generate() {
     if (state.sourceBlob) form.append('source', state.sourceBlob, 'source.png');
     form.append('resolution', $('quality').value);
     form.append('name', state.baseName);
+    form.append('kind', $('objectKind').value);
     form.append('engine', $('engineRow').hidden ? 'triposr' : $('engine').value);   // S9: dokładny silnik, gdy zainstalowany
     const t0 = performance.now();
     const res = await postRaw('/api/reconstruct', form);
@@ -1307,6 +1327,7 @@ async function openEntry(entry) {
     await loadGlb(await glb.arrayBuffer());
     const project = await fetchProject(entry);
     if (project) applyProject(project);
+    else if (entry.kind) { setField('objectKind', entry.kind); renderKindUi(); }
     $('btnSaveGlb').disabled = false;
     setStatus('cutoutStatus', t(project ? 'Otwarto z galerii: {name} (z zapisanymi zmianami)' : 'Otwarto z galerii: {name}', { name: entry.name }));
     setStatus('genStatus', '');
@@ -1368,6 +1389,11 @@ function applyProject(p) {
   }
   $('preset').value = '';
   afterBulkChange();
+  renderKindUi();
+  if (state.rig?.humanoid) {   // „ręce w dół” z zapisanego projektu – model jest już wczytany (setupRig był wcześniej)
+    setArmsDown(state.rig, state.model, $('armsDown').checked);
+    selectClip($('animClip').value);
+  }
   updateOrientation();
   updateEditButtons();
 }
@@ -1384,7 +1410,7 @@ async function saveToGallery() {
   setStatus('saveStatus', t('Zapisywanie…'), 'busy');
   try {
     const thumb = await galleryThumb();
-    if (!state.libraryId) state.libraryId = await createEntry(state.glbBlob, state.sourceBlob, thumb, state.baseName);
+    if (!state.libraryId) state.libraryId = await createEntry(state.glbBlob, state.sourceBlob, thumb, state.baseName, $('objectKind').value);
     await saveProject(state.libraryId, projectData(), state.sourceBlob, thumb);
     state.dirty = false;
     state.savedAt = new Date();
@@ -1574,6 +1600,7 @@ $('modelsAction').addEventListener('click', async () => {
 
 // ---------- S8: tekst → obraz (funkcja zaawansowana; widoczna, gdy zainstalowana) ----------
 let t2iInfo = null;
+let rigInfo = null;   // S10: stan funkcji „Szkielet i animacje” (deklaracja tu – renderKindUi woła renderRigUi wcześniej)
 
 function renderT2I() {
   const on = !!t2iInfo?.installed;
@@ -1599,7 +1626,7 @@ async function generateFromText() {
     const seed = $('t2iSeed').value;
     const res = await fetch('/api/text2image', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, seed: seed === '' ? null : Number(seed) }),
+      body: JSON.stringify({ prompt, seed: seed === '' ? null : Number(seed), kind: $('objectKind').value }),
     });
     if (!res.ok) {
       let msg = `${res.status} ${res.statusText}`;
@@ -1617,6 +1644,22 @@ async function generateFromText() {
     setBusy(false);
   }
 }
+
+// Rodzaj obiektu (zakładka Źródło): podpowiedź przy opisie, przykład w polu, blok szkieletu (tylko postać/stworzenie)
+const KIND_UI = {
+  character: { tip: 'Program dopisze: cała postać w T-pozie, od głowy do stóp, przodem, na białym tle (obraz pionowy).', example: 'np. medieval knight in plate armor' },
+  creature: { tip: 'Program dopisze: całe zwierzę z nogami i ogonem, widok trzy czwarte, na białym tle.', example: 'np. red dragon with big wings' },
+  building: { tip: 'Program dopisze: cały budynek od ziemi do dachu, widok z narożnika, bez otoczenia.', example: 'np. small stone tower with a wooden roof' },
+  object: { tip: 'Program dopisze: cały przedmiot, widok trzy czwarte, na białym tle.', example: 'np. golden treasure chest' },
+};
+function renderKindUi() {
+  const k = KIND_UI[$('objectKind').value] ?? KIND_UI.object;
+  $('t2iKindTip').textContent = t(k.tip);
+  $('t2iPrompt').placeholder = t(k.example);
+  renderRigUi();
+}
+$('objectKind').addEventListener('input', renderKindUi);
+renderKindUi();   // stan zapamiętany z poprzedniej sesji (SAVED_FIELDS)
 
 $('btnT2I').addEventListener('click', generateFromText);
 $('t2iPrompt').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) generateFromText(); });
@@ -1691,15 +1734,18 @@ function featureInstallControls(key, feature) {
 }
 
 // ---------- S10: szkielet i animacje (UniRig na serwerze, klipy proceduralne w rig.js) ----------
-let rigInfo = null;
 
 function renderRigUi() {
   const installed = !!rigInfo?.installed;
-  $('rigBlock').hidden = !installed;
+  const kind = $('objectKind').value;
   const has = !!state.rig;
-  $('rigTypeRow').hidden = has;
+  // budynek i przedmiot nie mają szkieletu; rodzaj szkieletu wynika z rodzaju obiektu (postać = kości VRoid)
+  $('rigBlock').hidden = !installed || (!has && kind !== 'character' && kind !== 'creature');
+  $('rigTypeRow').hidden = true;
+  $('rigType').value = kind === 'character' ? 'humanoid' : 'generic';
   $('btnRig').hidden = has;
   $('animClipRow').hidden = !has;
+  $('armsDownRow').hidden = !(has && state.rig.humanoid);
   $('animFrameRow').hidden = !state.action;
   $('animSheetBlock').hidden = !state.action;
   if (has) $('rigStatus').textContent = state.rig.humanoid
@@ -1721,9 +1767,18 @@ function setupRig() {
     const sel = $('animClip');
     sel.replaceChildren(...['none', ...clipNames(state.rig)].map((n) => Object.assign(document.createElement('option'), { value: n, textContent: t(CLIP_LABELS[n]) })));
     sel.value = 'none';
+    if ($('armsDown').checked && state.rig.humanoid) { setArmsDown(state.rig, state.model, true); resetPose(state.rig); }
   }
   renderRigUi();
 }
+
+// „Ręce w dół”: nowa poza spoczynkowa ramion + przebudowa bieżącego klipu (klipy liczą obroty od pozy spoczynkowej)
+$('armsDown').addEventListener('input', () => {
+  if (!state.rig?.humanoid) return;
+  setArmsDown(state.rig, state.model, $('armsDown').checked);
+  selectClip($('animClip').value);
+  markDirty();
+});
 
 function clearRig() {
   if (state.mixer) state.mixer.stopAllAction();
@@ -1791,7 +1846,7 @@ async function rigModel() {
   setStatus('rigStatus', t('Szkielet (AI)… to potrwa około minuty.'), 'busy');
   try {
     // model wczytany z pliku .glb nie ma jeszcze wpisu w galerii – szkielet zapisujemy przy wpisie
-    if (!state.libraryId) state.libraryId = await createEntry(state.glbBlob, state.sourceBlob, null, state.baseName);
+    if (!state.libraryId) state.libraryId = await createEntry(state.glbBlob, state.sourceBlob, null, state.baseName, $('objectKind').value);
   } catch (e) {
     setStatus('rigStatus', e.message, 'err');
     setBusy(false);
@@ -1805,18 +1860,17 @@ async function rigModel() {
   }, 1000);
   try {
     const form = new FormData();
-    form.append('humanoid', $('rigType').value === 'humanoid');
+    form.append('humanoid', $('objectKind').value === 'character');
     const res = await postRaw(`/api/library/${state.libraryId}/rig`, form);
     const blob = await res.blob();
     state.glbBlob = blob;
     await loadGlb(await blob.arrayBuffer());
-    renderRigUi();
     refreshRecent();
     if (res.headers.get('X-Rig-Fallback') === '1') {
       // model nie dał kompletu kości postaci (VRoid) – jest szkielet ogólny, więc tylko animacje ogólne
       setStatus('rigStatus', t('Nie udało się rozpoznać budowy postaci – utworzono szkielet ogólny (animacje: kołysanie, podskok).'), 'err');
     } else {
-      setStatus('rigStatus', '');
+      renderRigUi();   // status „Szkielet postaci (n kości)…”
       toast(t('Szkielet gotowy – wybierz animację w zakładce Model.'));
     }
   } catch (e) {

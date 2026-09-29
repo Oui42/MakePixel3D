@@ -224,7 +224,8 @@ async def api_text2image(request: Request):
     seed = data.get("seed")
     try:
         image = await anyio.to_thread.run_sync(
-            text2image.generate, prompt, int(seed) if seed not in (None, "") else None, int(data.get("size") or 1024))
+            text2image.generate, prompt, int(seed) if seed not in (None, "") else None, int(data.get("size") or 0), 4,
+            str(data.get("kind") or "object"))
     except ValueError as exc:
         raise HTTPException(400, str(exc))
     except Exception as exc:  # noqa: BLE001
@@ -317,6 +318,7 @@ async def api_reconstruct(
     resolution: int = Form(192),
     name: str = Form(""),
     engine: str = Form("triposr"),                 # triposr | instantmesh (S9 „lepszy tył obiektu”, gdy zainstalowany)
+    kind: str = Form("object"),                    # rodzaj obiektu (character|creature|building|object) – do meta galerii
 ):
     """Obiekt bez tła (PNG) → model 3D (GLB). Wynik trafia też do galerii (nagłówek X-Library-Id)."""
     image = await _read_image(file)
@@ -340,7 +342,7 @@ async def api_reconstruct(
             raise HTTPException(503, tr("Brakuje modeli AI, a nie udało się ich pobrać (brak internetu?). Pobierz je przyciskiem na pasku u góry okna, gdy będzie połączenie."))
         raise HTTPException(500, tr("Błąd generowania 3D: {exc}", exc=exc))
     meta = {"quality": resolution, "seconds": round(time.time() - t0, 1), "device": reconstruct.device_name(),
-            "engine": engine}
+            "engine": engine, "kind": kind}
     try:
         entry_id = library.add(name, source_png, image, glb, meta)
     except OSError as exc:  # brak miejsca itp. – model i tak oddajemy, tylko bez zapisu w galerii
@@ -369,12 +371,13 @@ async def api_library_add(
     source: UploadFile | None = File(None),
     thumb: UploadFile | None = File(None),
     name: str = Form(""),
+    kind: str = Form("object"),
 ):
     """Nowy wpis dla modelu, który nie powstał tutaj (np. wczytany z pliku .glb)."""
     glb = await model.read()
     source_png = await source.read() if source else None
     thumb_png = await thumb.read() if thumb else None
-    entry_id = library.add(name, source_png, None, glb, {"device": "wczytany z pliku"}, thumb_png)
+    entry_id = library.add(name, source_png, None, glb, {"device": "wczytany z pliku", "kind": kind}, thumb_png)
     return {"id": entry_id}
 
 

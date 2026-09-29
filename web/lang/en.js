@@ -4,6 +4,36 @@
 export const EN = {
   // ---------- S10: szkielet i animacje ----------
   'Szkielet i animacje': 'Skeleton and animations',
+  'Co tworzysz?': 'What are you making?',
+  'Postać: cała sylwetka w T-pozie, szkielet z animacjami chodu i ataku. Stworzenie: zwierzę, potwór – szkielet ogólny. Budynek i przedmiot: bez szkieletu.':
+    'Character: full figure in a T-pose, skeleton with walk and attack animations. Creature: animal, monster – generic skeleton. Building and object: no skeleton.',
+  'Człowiek, humanoid – T-poza, cała sylwetka ze stopami; szkielet z animacjami chodu, biegu i ataku': 'Human, humanoid – T-pose, whole figure with feet; skeleton with walk, run and attack animations',
+  'Zwierzę, potwór, robot na czterech nogach – szkielet ogólny (kołysanie, podskok)': 'Animal, monster, four-legged robot – generic skeleton (sway, bounce)',
+  'Dom, wieża, ruina – widok z narożnika; bez szkieletu': 'House, tower, ruin – corner view; no skeleton',
+  'Broń, skrzynia, pojazd, roślina – widok trzy czwarte; bez szkieletu': 'Weapon, chest, vehicle, plant – three-quarter view; no skeleton',
+  'Stworzenie': 'Creature', 'Budynek': 'Building', 'Przedmiot': 'Object',
+  'postać': 'character', 'stworzenie': 'creature', 'budynek': 'building', 'przedmiot': 'object',
+  'np. medieval knight in plate armor': 'e.g. medieval knight in plate armor',
+  'np. red dragon with big wings': 'e.g. red dragon with big wings',
+  'np. small stone tower with a wooden roof': 'e.g. small stone tower with a wooden roof',
+  'np. golden treasure chest': 'e.g. golden treasure chest',
+  'Najlepsze wyniki daje opis po angielsku. Ujęcie, tło i (dla postaci) T-pozę program dopisuje sam według wybranego rodzaju.':
+    'English descriptions work best. The framing, background and (for characters) the T-pose are added automatically for the chosen type.',
+  'Program dopisze: cała postać w T-pozie, od głowy do stóp, przodem, na białym tle (obraz pionowy).':
+    'Added automatically: whole character in a T-pose, head to feet, front view, white background (portrait image).',
+  'Program dopisze: całe zwierzę z nogami i ogonem, widok trzy czwarte, na białym tle.':
+    'Added automatically: whole animal with legs and tail, three-quarter view, white background.',
+  'Program dopisze: cały budynek od ziemi do dachu, widok z narożnika, bez otoczenia.':
+    'Added automatically: whole building from the ground to the roof, corner view, no surroundings.',
+  'Program dopisze: cały przedmiot, widok trzy czwarte, na białym tle.':
+    'Added automatically: whole object, three-quarter view, white background.',
+  'Uwaga: postać dotyka krawędzi obrazu – pewnie jest ucięta (np. stopy). Lepiej wygeneruj obraz ponownie (inne ziarno) albo użyj innego zdjęcia.':
+    'Warning: the character touches the image edge – it is probably cut off (e.g. the feet). Better generate the image again (another seed) or use a different photo.',
+  'Uwaga: obiekt dotyka krawędzi obrazu – może być ucięty. Model 3D będzie miał w tym miejscu płaską ścianę.':
+    'Warning: the object touches the image edge – it may be cut off. The 3D model will have a flat wall there.',
+  'Ręce w dół (zamiast T-pozy)': 'Arms down (instead of a T-pose)',
+  'Postać z obrazu stoi w T-pozie (ręce w bok) – ta opcja opuszcza ramiona wzdłuż tułowia w pozie spoczynkowej i we wszystkich animacjach':
+    'A character from an image stands in a T-pose (arms out) – this option lowers the arms along the body in the rest pose and in all animations',
   'Rodzaj': 'Type',
   'Postać: kości nazwane jak u ludzi (biodra, ręce, nogi) – działają gotowe animacje chodu, biegu i ataku. Inny obiekt: szkielet ogólny – tylko kołysanie i podskok.': 'Character: human-like named bones (hips, arms, legs) – the ready-made walk, run and attack animations work. Other object: generic skeleton – only sway and bounce.',
   'Postać': 'Character',
