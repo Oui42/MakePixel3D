@@ -1810,10 +1810,15 @@ async function rigModel() {
     const blob = await res.blob();
     state.glbBlob = blob;
     await loadGlb(await blob.arrayBuffer());
-    setStatus('rigStatus', '');
     renderRigUi();
     refreshRecent();
-    toast(t('Szkielet gotowy – wybierz animację w zakładce Model.'));
+    if (res.headers.get('X-Rig-Fallback') === '1') {
+      // model nie dał kompletu kości postaci (VRoid) – jest szkielet ogólny, więc tylko animacje ogólne
+      setStatus('rigStatus', t('Nie udało się rozpoznać budowy postaci – utworzono szkielet ogólny (animacje: kołysanie, podskok).'), 'err');
+    } else {
+      setStatus('rigStatus', '');
+      toast(t('Szkielet gotowy – wybierz animację w zakładce Model.'));
+    }
   } catch (e) {
     setStatus('rigStatus', e.message, 'err');
   } finally {

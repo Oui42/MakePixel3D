@@ -274,13 +274,16 @@ async def api_library_rig(entry_id: str, humanoid: bool = Form(False)):
     if not rigging.installed():
         raise HTTPException(409, tr("Funkcja „Szkielet i animacje” nie jest zainstalowana."))
     try:
-        rigged = await anyio.to_thread.run_sync(rigging.rig, glb, humanoid)
+        rigged, used_humanoid = await anyio.to_thread.run_sync(rigging.rig, glb, humanoid)
     except Exception as exc:  # noqa: BLE001
         import traceback
         traceback.print_exc()
         raise HTTPException(500, tr("Błąd tworzenia szkieletu: {exc}", exc=exc))
-    library.save_rigged(entry_id, rigged, humanoid)
-    return Response(rigged, media_type="model/gltf-binary")
+    library.save_rigged(entry_id, rigged, used_humanoid)
+    # X-Rig-Fallback: proszono o szkielet postaci, ale UniRig nie dał kompletu kości VRoid – jest szkielet ogólny
+    headers = {"X-Rig-Humanoid": "1" if used_humanoid else "0",
+               "X-Rig-Fallback": "1" if humanoid and not used_humanoid else "0"}
+    return Response(rigged, media_type="model/gltf-binary", headers=headers)
 
 
 @app.get("/api/capabilities")

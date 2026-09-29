@@ -343,19 +343,58 @@ def _env() -> dict:
     }
 
 
-def _step(args: list[str], cwd: Path):
+def _step(args: list[str], cwd: Path, expect: Path | None = None) -> str:
+    """Podproces UniRig. `expect` = plik, który krok MUSI zapisać – skrypty UniRig (extract, run.py) łykają wyjątki
+    i kończą się kodem 0 (np. „Error found when processing …”), więc sam kod wyjścia nie wystarcza."""
+    if expect is not None and expect.exists():
+        expect.unlink()
     p = subprocess.run(args, cwd=str(cwd), env={**os.environ, **_env()}, capture_output=True, text=True,
                        encoding="utf-8", errors="replace", timeout=TIMEOUT_S,
                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-    if p.returncode != 0:
-        out = (p.stdout or "") + (p.stderr or "")
+    out = (p.stdout or "") + (p.stderr or "")
+    if p.returncode != 0 or (expect is not None and not expect.is_file()):
         print(out[-4000:], flush=True)
-        tail = "\n".join(out.strip().splitlines()[-6:])
+        lines = [ln for ln in out.strip().splitlines() if ln.strip()]
+        errors = [ln for ln in lines if "error" in ln.lower() or NOT_ENOUGH_BONES in ln]
+        tail = "\n".join((errors or lines)[-6:])
+        if p.returncode == 0:
+            tail = tr("UniRig nie zapisał pliku {name}", name=expect.name) + ("\n" + tail if tail else "")
         raise RuntimeError(tail)
+    return out
 
 
-def rig(glb: bytes, humanoid: bool = False) -> bytes:
-    """GLB (siatka z kolorami) → GLB ze szkieletem i wagami skórowania. humanoid=True: kości nazwane po VRoid."""
+SKELETON_SEEDS = (12345, 1, 2, 3)   # generowanie szkieletu losuje tokeny – gdy wynik jest niepoprawny, próbujemy inne ziarno
+NOT_ENOUGH_BONES = "more than existing bones"   # komunikat UniRig (src/data/order.py), gdy szablon nazw (vroid) nie pasuje
+
+
+def _predict_skeleton(src: Path, skel: Path, npz: Path, humanoid: bool) -> bool:
+    """run.py --task skeleton z kilkoma ziarnami. Zwraca True, gdy powstał szkielet HUMANOIDALNY (nazwy VRoid).
+    Dla postaci model czasem generuje za mało kości dla szablonu VRoid (asercja w UniRig, plik FBX nie powstaje) –
+    wtedy inne ziarno zwykle pomaga; gdy nie, wracamy do szkieletu ogólnego (kości bone_N, tylko animacje ogólne)."""
+    tasks = [(True, "configs/task/skeleton_vroid_mp3d.yaml")] if humanoid else []
+    tasks.append((False, "configs/task/skeleton_mp3d.yaml"))
+    last = None
+    for is_humanoid, task in tasks:
+        for i, seed in enumerate(SKELETON_SEEDS):
+            if i:
+                _set_stage(tr("Przewidywanie szkieletu (UniRig)… próba {n}", n=i + 1))
+            try:
+                _step([str(PY), str(RUNNER), "run.py", "--task", task, "--seed", str(seed), "--input", str(src),
+                       "--output", str(skel), "--npz_dir", str(npz)], CODE_DIR, expect=skel)
+                return is_humanoid
+            except RuntimeError as exc:
+                last = exc
+                if NOT_ENOUGH_BONES not in str(exc) and skel.is_file():
+                    raise
+                print(f"[rigging] szkielet (ziarno {seed}, {task}) nie powstał: {exc}", flush=True)
+        if is_humanoid:
+            print("[rigging] szkielet postaci nie powstał – szkielet ogólny", flush=True)
+    raise last if last else RuntimeError(tr("UniRig nie zapisał pliku {name}", name=skel.name))
+
+
+def rig(glb: bytes, humanoid: bool = False) -> tuple[bytes, bool]:
+    """GLB (siatka z kolorami) → (GLB ze szkieletem i wagami skórowania, czy szkielet jest humanoidalny).
+    humanoid=True: kości nazwane po VRoid; gdy się nie uda (patrz _predict_skeleton), wynik ma szkielet ogólny."""
     if not installed():
         raise RuntimeError(tr("Funkcja „Szkielet i animacje” nie jest zainstalowana."))
     import multiview
@@ -378,28 +417,28 @@ def rig(glb: bytes, humanoid: bool = False) -> bytes:
             extract = [str(PY), "-m", "src.data.extract", "--config", "configs/data/quick_inference.yaml",
                        "--faces_target_count", "50000", "--num_runs", "1", "--force_override", "true", "--id", "0",
                        "--time", "t", "--output_dir", str(npz)]
+            # UWAGA: extract liczy folder wyjściowy jako join(output_dir, ścieżka_wejścia_bez_rozszerzenia) – dla ścieżki
+            # bezwzględnej wychodzi <work>/<nazwa>/raw_data.npz (output_dir jest pomijany); run.py liczy to tak samo.
             _set_stage(tr("Przygotowanie siatki (Blender)…"))
-            _step(extract + ["--require_suffix", "glb", "--input", str(src)], CODE_DIR)
+            _step(extract + ["--require_suffix", "glb", "--input", str(src)], CODE_DIR,
+                  expect=work / "input" / "raw_data.npz")
             _set_stage(tr("Przewidywanie szkieletu (UniRig)…"))
-            task = "configs/task/skeleton_vroid_mp3d.yaml" if humanoid else "configs/task/skeleton_mp3d.yaml"
             skel = work / "skeleton.fbx"
-            _step([str(PY), str(RUNNER), "run.py", "--task", task, "--seed", "12345", "--input", str(src),
-                   "--output", str(skel), "--npz_dir", str(npz)], CODE_DIR)
+            humanoid = _predict_skeleton(src, skel, npz, humanoid)
             _set_stage(tr("Przygotowanie szkieletu…"))
-            _step(extract + ["--require_suffix", "fbx", "--input", str(skel)], CODE_DIR)
+            _step(extract + ["--require_suffix", "fbx", "--input", str(skel)], CODE_DIR,
+                  expect=work / "skeleton" / "raw_data.npz")
             _set_stage(tr("Wagi skórowania (UniRig)…"))
             skin = work / "skin.fbx"
             _step([str(PY), str(RUNNER), "run.py", "--task", "configs/task/skin_mp3d.yaml", "--seed", "12345",
                    "--input", str(skel), "--output", str(skin), "--npz_dir", str(npz), "--data_name", "raw_data.npz"],
-                  CODE_DIR)
+                  CODE_DIR, expect=skin)
             _set_stage(tr("Scalanie modelu ze szkieletem…"))
             out = work / "rigged.glb"
             _step([str(PY), "-m", "src.inference.merge", "--require_suffix", "glb", "--num_runs", "1", "--id", "0",
-                   "--source", str(skin), "--target", str(src), "--output", str(out)], CODE_DIR)
-            if not out.is_file():
-                raise RuntimeError(tr("UniRig nie zapisał wyniku"))
+                   "--source", str(skin), "--target", str(src), "--output", str(out)], CODE_DIR, expect=out)
             _set_stage("idle")
-            return out.read_bytes()
+            return out.read_bytes(), humanoid
         except Exception as exc:
             status["error"] = str(exc)
             _set_stage("idle")

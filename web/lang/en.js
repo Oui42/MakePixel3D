@@ -29,6 +29,8 @@ export const EN = {
   'Szkielet ogólny ({n} kości) – dostępne animacje ogólne.': 'Generic skeleton ({n} bones) – generic animations available.',
   'Szkielet (AI)… to potrwa około minuty.': 'Skeleton (AI)… this takes about a minute.',
   'Szkielet gotowy – wybierz animację w zakładce Model.': 'Skeleton ready – choose an animation in the Model tab.',
+  'Nie udało się rozpoznać budowy postaci – utworzono szkielet ogólny (animacje: kołysanie, podskok).':
+    'The character structure could not be recognised – a generic skeleton was created (animations: sway, bounce).',
   'Arkusz animacji': 'Animation sheet',
   'Liczba klatek ruchu w jednym wierszu arkusza (i w animacji)': 'Number of motion frames in one row of the sheet (and in the animation)',
   'Klatki ruchu': 'Motion frames',

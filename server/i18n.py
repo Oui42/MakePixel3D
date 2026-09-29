@@ -97,6 +97,8 @@ EN = {
     "Wagi skórowania (UniRig)…": "Skinning weights (UniRig)…",
     "Scalanie modelu ze szkieletem…": "Merging the model with the skeleton…",
     "UniRig nie zapisał wyniku": "UniRig did not write a result",
+    "UniRig nie zapisał pliku {name}": "UniRig did not write the file {name}",
+    "Przewidywanie szkieletu (UniRig)… próba {n}": "Predicting the skeleton (UniRig)… attempt {n}",
     "Błąd tworzenia szkieletu: {exc}": "Skeleton generation error: {exc}",
     "AI dorysowuje widoki z innych stron, zanim powstanie model 3D – wyraźnie lepsze boki i tył.":
         "AI draws views from other sides before the 3D model is built – much better sides and back.",
