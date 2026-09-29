@@ -225,6 +225,19 @@ async def api_text2image(request: Request):
     data = await request.json()
     prompt = str(data.get("prompt", ""))
     seed = data.get("seed")
+    kind = str(data.get("kind") or "object")
+    # postać w dokładnej T-pozie: manekin + model edycji (Kontext), gdy zainstalowany i użytkownik nie wyłączył
+    if kind == "character" and data.get("tpose", True) and imageedit.installed():
+        try:
+            image = await anyio.to_thread.run_sync(imageedit.tpose_character, prompt,
+                                                   int(seed) if seed not in (None, "") else None)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc))
+        except Exception as exc:  # noqa: BLE001
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(500, tr("Błąd generowania obrazu: {exc}", exc=exc))
+        return _png(image)
     try:
         image = await anyio.to_thread.run_sync(
             text2image.generate, prompt, int(seed) if seed not in (None, "") else None, int(data.get("size") or 0), 4,
@@ -253,11 +266,17 @@ def api_imageedit_install():
 
 
 @app.post("/api/imageedit")
-async def api_imageedit(file: UploadFile = File(...), prompt: str = Form(""), seed: str = Form("")):
-    """S11: obraz (obiekt na białym tle) + polecenie → zmieniony obraz PNG (dalej jak zwykłe zdjęcie: tło, model 3D)."""
+async def api_imageedit(file: UploadFile = File(...), prompt: str = Form(""), seed: str = Form(""),
+                        preset: str = Form("")):
+    """S11: obraz (obiekt na białym tle) + polecenie → zmieniony obraz PNG (dalej jak zwykłe zdjęcie: tło, model 3D).
+    preset=tpose: gotowa instrukcja „wyprostuj ręce do T-pozy” (mniej kroków)."""
     image = await _read_image(file)
+    s = int(seed) if seed.strip() else None
     try:
-        out = await anyio.to_thread.run_sync(imageedit.generate, image, prompt, int(seed) if seed.strip() else None)
+        if preset == "tpose":
+            out = await anyio.to_thread.run_sync(imageedit.straighten_arms, image, s)
+        else:
+            out = await anyio.to_thread.run_sync(imageedit.generate, image, prompt, s)
     except ValueError as exc:
         raise HTTPException(422, str(exc))
     except Exception as exc:  # noqa: BLE001

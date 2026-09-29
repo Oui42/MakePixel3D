@@ -65,6 +65,7 @@ EN = {
     "Napisz, co zmienić na obrazie.": "Write what to change in the image.",
     "Model edycji obrazu nie jest zainstalowany.": "The image editing model is not installed.",
     "Błąd edycji obrazu: {exc}": "Image editing error: {exc}",
+    "Błąd generowania obrazu: {exc}": "Image generation error: {exc}",
     "Szkielet innego modelu jest właśnie liczony – poczekaj na jego koniec.": "A skeleton for another model is being computed – wait for it to finish.",
     "Nie ma takiego zadania.": "No such job.",
     # S8: tekst → obraz

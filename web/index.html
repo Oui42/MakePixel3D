@@ -109,6 +109,7 @@
             <label class="lbl" for="t2iPrompt">Opisz słowami – AI stworzy obraz</label>
             <textarea id="t2iPrompt" rows="3" placeholder="np. medieval knight in plate armor" title="Najlepsze wyniki daje opis po angielsku. Ujęcie, tło i (dla postaci) T-pozę program dopisuje sam według wybranego rodzaju."></textarea>
             <p class="tip" id="t2iKindTip"></p>
+            <label class="check" id="t2iTposeRow" hidden title="Postać powstaje z manekina w T-pozie modelem edycji obrazu – ramiona zawsze proste i poziome. Wolniej (ok. 1,5 min) niż zwykłe generowanie (kilkanaście sekund)."><input id="t2iTpose" type="checkbox" checked> Dokładna T-poza (wolniej, ok. 1,5 min)</label>
             <div class="row">
               <label for="t2iSeed" title="To samo ziarno = ten sam obraz dla tego samego opisu">Ziarno</label>
               <input id="t2iSeed" type="number" min="0" max="2147483647" placeholder="losowe" title="To samo ziarno = ten sam obraz dla tego samego opisu">
@@ -126,6 +127,7 @@
               <input id="editSeed" type="number" min="0" max="2147483647" placeholder="losowe" title="To samo ziarno = ten sam wynik dla tego samego polecenia">
             </div>
             <button id="btnEdit" class="block primary" type="button">Zmień obraz (AI, ok. 1–2 min)</button>
+            <button id="btnEditTpose" class="block" type="button" hidden title="Gotowe polecenie: ręce wyprostowane poziomo do standardowej T-pozy, reszta bez zmian (ok. 1,5 min)">Wyprostuj ręce do T-pozy</button>
             <button id="btnEditUndo" class="block" type="button" hidden>Przywróć obraz sprzed zmiany</button>
             <p id="editStatus" class="status"></p>
           </div>

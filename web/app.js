@@ -1648,6 +1648,7 @@ $('modelsAction').addEventListener('click', async () => {
 
 // ---------- S8: tekst → obraz (funkcja zaawansowana; widoczna, gdy zainstalowana) ----------
 let t2iInfo = null;
+let editInfo = null;   // S11: stan funkcji „Edycja obrazu” (deklaracja tu – renderKindUi używa go wcześniej)
 let rigInfo = null;   // S10: stan funkcji „Szkielet i animacje” (deklaracja tu – renderKindUi woła renderRigUi wcześniej)
 
 function renderT2I() {
@@ -1670,11 +1671,18 @@ async function generateFromText() {
   if (document.body.classList.contains('busy') || !confirmDiscard()) return;
   setBusy(true);
   setStatus('t2iStatus', t('Generowanie obrazu (AI)… Za pierwszym razem wczytanie modelu trwa około minuty.'), 'busy');
+  const poll = setInterval(async () => {   // etap + sekundy (T-poza z manekina trwa ok. 1,5 min)
+    try {
+      const s = await (await fetch('/api/status')).json();
+      if (s.stage !== 'idle') setStatus('t2iStatus', `${s.stage} – ${Math.round(s.elapsed)} s`, 'busy');
+    } catch { /* serwer zajęty */ }
+  }, 1000);
   try {
     const seed = $('t2iSeed').value;
     const res = await fetch('/api/text2image', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, seed: seed === '' ? null : Number(seed), kind: $('objectKind').value }),
+      body: JSON.stringify({ prompt, seed: seed === '' ? null : Number(seed), kind: $('objectKind').value,
+        tpose: $('objectKind').value === 'character' && !$('t2iTposeRow').hidden && $('t2iTpose').checked }),
     });
     if (!res.ok) {
       let msg = `${res.status} ${res.statusText}`;
@@ -1682,6 +1690,7 @@ async function generateFromText() {
       throw new Error(msg);
     }
     const blob = await res.blob();
+    clearInterval(poll);
     setStatus('t2iStatus', t('Obraz gotowy – usuwanie tła…'), 'busy');
     setBusy(false);
     await handleFile(new File([blob], `${safeName(prompt.slice(0, 40))}.png`, { type: 'image/png' }));
@@ -1689,6 +1698,7 @@ async function generateFromText() {
   } catch (e) {
     setStatus('t2iStatus', e.message, 'err');
   } finally {
+    clearInterval(poll);
     setBusy(false);
   }
 }
@@ -1701,20 +1711,25 @@ const KIND_UI = {
   object: { tip: 'Program dopisze: cały przedmiot, widok trzy czwarte, na białym tle.', example: 'np. golden treasure chest' },
 };
 function renderKindUi() {
-  const k = KIND_UI[$('objectKind').value] ?? KIND_UI.object;
-  $('t2iKindTip').textContent = t(k.tip);
+  const kind = $('objectKind').value;
+  const k = KIND_UI[kind] ?? KIND_UI.object;
+  const tpose = kind === 'character' && !!editInfo?.installed;   // dokładna T-poza wymaga modelu edycji (Kontext)
+  $('t2iKindTip').textContent = t(tpose && $('t2iTpose').checked ? 'Postać powstanie z manekina w T-pozie (model edycji) – ramiona proste i poziome, cała sylwetka, białe tło.' : k.tip);
   $('t2iPrompt').placeholder = t(k.example);
+  $('t2iTposeRow').hidden = !tpose;
+  $('btnEditTpose').hidden = kind !== 'character';
   renderRigUi();
 }
+$('t2iTpose').addEventListener('input', renderKindUi);
 $('objectKind').addEventListener('input', renderKindUi);
 renderKindUi();   // stan zapamiętany z poprzedniej sesji (SAVED_FIELDS)
 
 $('btnT2I').addEventListener('click', generateFromText);
 
 // ---------- S11: edycja obrazu przez AI (FLUX Kontext na serwerze) ----------
-let editInfo = null;
 function renderEditUi() {
   $('editBlock').hidden = !editInfo?.installed;
+  renderKindUi();   // opcja „Dokładna T-poza” zależy od zainstalowanego modelu edycji
 }
 async function checkImageEdit() {
   try { editInfo = await (await fetch('/api/imageedit')).json(); renderEditUi(); } catch { /* serwer niedostępny */ }
@@ -1733,9 +1748,9 @@ async function sourceOnWhite() {
   return canvasBlob(c);
 }
 
-async function editImage() {
-  const prompt = $('editPrompt').value.trim();
-  if (!prompt) { setStatus('editStatus', t('Napisz, co zmienić na obrazie.'), 'err'); return; }
+async function editImage(preset = '') {
+  const prompt = preset ? '' : $('editPrompt').value.trim();
+  if (!prompt && !preset) { setStatus('editStatus', t('Napisz, co zmienić na obrazie.'), 'err'); return; }
   if (!state.source || document.body.classList.contains('busy') || !confirmDiscard()) return;
   setBusy(true);
   setStatus('editStatus', t('Edycja obrazu (AI)… Za pierwszym razem wczytanie modelu trwa około minuty.'), 'busy');
@@ -1750,6 +1765,7 @@ async function editImage() {
     form.append('file', await sourceOnWhite(), 'source.png');
     form.append('prompt', prompt);
     form.append('seed', $('editSeed').value);
+    if (preset) form.append('preset', preset);
     const blob = await post('/api/imageedit', form);
     clearInterval(poll);
     const prev = state.sourceBlob;
@@ -1782,7 +1798,8 @@ async function undoEdit() {
   state.editPrev = null;
   $('btnEditUndo').hidden = true;
 }
-$('btnEdit').addEventListener('click', editImage);
+$('btnEdit').addEventListener('click', () => editImage());
+$('btnEditTpose').addEventListener('click', () => editImage('tpose'));
 $('btnEditUndo').addEventListener('click', undoEdit);
 $('editPrompt').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) editImage(); });
 checkImageEdit();

@@ -34,6 +34,13 @@ export const EN = {
   'Ręce w dół (zamiast T-pozy)': 'Arms down (instead of a T-pose)',
   'zmiana': 'change',
   'Zmień obraz przez AI': 'Change the image with AI',
+  'Dokładna T-poza (wolniej, ok. 1,5 min)': 'Exact T-pose (slower, about 1.5 min)',
+  'Postać powstaje z manekina w T-pozie modelem edycji obrazu – ramiona zawsze proste i poziome. Wolniej (ok. 1,5 min) niż zwykłe generowanie (kilkanaście sekund).':
+    'The character is created from a T-pose mannequin with the image-editing model – arms always straight and horizontal. Slower (about 1.5 min) than normal generation (a dozen seconds).',
+  'Postać powstanie z manekina w T-pozie (model edycji) – ramiona proste i poziome, cała sylwetka, białe tło.':
+    'The character will be created from a T-pose mannequin (editing model) – straight horizontal arms, whole figure, white background.',
+  'Wyprostuj ręce do T-pozy': 'Straighten the arms into a T-pose',
+  'Gotowe polecenie: ręce wyprostowane poziomo do standardowej T-pozy, reszta bez zmian (ok. 1,5 min)': 'Ready-made instruction: arms straightened horizontally into a standard T-pose, everything else unchanged (about 1.5 min)',
   'np. add a sword in the right hand': 'e.g. add a sword in the right hand',
   'Po angielsku, jedno polecenie naraz. Reszta obrazu (postać, poza, styl) zostaje – program dopisuje to sam. Po zmianie wygeneruj model 3D od nowa.':
     'In English, one instruction at a time. The rest of the image (subject, pose, style) stays – the program adds that itself. After the change, generate the 3D model again.',

@@ -33,6 +33,19 @@ PROMPT_SUFFIX = (". Keep everything else exactly the same: the same subject, pos
 STEPS = 28
 GUIDANCE = 2.5
 MAX_SIDE = 1024
+# T-poza postaci (zgłoszenie użytkownika 29.09.2026: FLUX.1-schnell z promptu daje zgięte łokcie i dłonie w górę): zamiast
+# promptu – REFERENCJA: szary manekin w T-pozie narysowany programowo, a Kontext „przebiera” go w opisaną postać.
+# Sprawdzone: rycerz, elf – ramiona proste, poziomo; 16 kroków wystarcza (81 s na RTX 5070, 28 kroków = 144 s).
+TPOSE_STEPS = 16
+TPOSE_SIZE = (832, 1216)
+# instrukcja „zachowaj wszystko” bywała za ostrożna (elf, seed 5: prawie nietknięty manekin) – opis postaci na początku,
+# poza jako warunek, guidance 3.0 (sprawdzone 29.09.2026: 4 warianty × T-poza OK, ta daje najlepsze proporcje)
+TPOSE_INSTRUCTION = ("A detailed, colorful {prompt} standing in exactly this T-pose (arms straight out horizontally, palms "
+                     "down, legs straight, same proportions and framing), game character concept art, front view, plain "
+                     "white background")
+TPOSE_GUIDANCE = 3.0
+STRAIGHTEN_INSTRUCTION = ("Straighten both arms into a standard T-pose: both arms perfectly horizontal at shoulder height, "
+                          "elbows fully straight, palms facing down, fingers pointing sideways")
 
 status = {
     "installed": False, "installing": False, "progress": 0.0, "current": None, "error": None,
@@ -204,8 +217,40 @@ def _fit(image: Image.Image) -> Image.Image:
     return image.resize((w, h), Image.LANCZOS)
 
 
-def generate(image: Image.Image, prompt: str, seed: int | None = None) -> Image.Image:
-    """Obraz (RGB, obiekt na białym tle) + polecenie → zmieniony obraz RGB tej samej wielkości (w przybliżeniu)."""
+def tpose_mannequin(size: tuple[int, int] = TPOSE_SIZE) -> Image.Image:
+    """Szary manekin w T-pozie (głowa, tułów, poziome ramiona, nogi) – referencja pozy dla Kontext."""
+    from PIL import ImageDraw
+    w, h = size
+    m = Image.new("RGB", (w, h), "white")
+    d = ImageDraw.Draw(m)
+    g = (150, 150, 150)
+    cx, k = w // 2, h / 1216   # proporcje ~7,5 głowy (eksperyment 832×1216; szerszy manekin dawał krępe postacie)
+    d.ellipse([cx - 58 * k, 150 * k, cx + 58 * k, 266 * k], fill=g)                    # głowa
+    d.rounded_rectangle([cx - 78 * k, 276 * k, cx + 78 * k, 630 * k], 40 * k, fill=g)   # tułów
+    d.rounded_rectangle([cx - 400 * k, 296 * k, cx + 400 * k, 360 * k], 32 * k, fill=g) # ramiona poziomo (T)
+    d.rounded_rectangle([cx - 76 * k, 630 * k, cx - 14 * k, 1090 * k], 28 * k, fill=g)  # noga L
+    d.rounded_rectangle([cx + 14 * k, 630 * k, cx + 76 * k, 1090 * k], 28 * k, fill=g)  # noga P
+    return m
+
+
+def tpose_character(prompt: str, seed: int | None = None) -> Image.Image:
+    """Opis postaci → obraz w dokładnej T-pozie (manekin + Kontext). Używane przez /api/text2image dla rodzaju „postać”."""
+    prompt = prompt.strip()
+    if not prompt:
+        raise ValueError(tr("Wpisz, co ma przedstawiać obraz."))
+    return generate(tpose_mannequin(), TPOSE_INSTRUCTION.format(prompt=prompt), seed, steps=TPOSE_STEPS, raw=True,
+                    guidance=TPOSE_GUIDANCE)
+
+
+def straighten_arms(image: Image.Image, seed: int | None = None) -> Image.Image:
+    """Zdjęcie/obraz postaci → ta sama postać z rękami wyprostowanymi do T-pozy."""
+    return generate(image, STRAIGHTEN_INSTRUCTION, seed, steps=TPOSE_STEPS)
+
+
+def generate(image: Image.Image, prompt: str, seed: int | None = None, steps: int = STEPS, raw: bool = False,
+             guidance: float = GUIDANCE) -> Image.Image:
+    """Obraz (RGB, obiekt na białym tle) + polecenie → zmieniony obraz RGB tej samej wielkości (w przybliżeniu).
+    raw=True: polecenie bez PROMPT_SUFFIX (gotowa instrukcja, np. T-poza z manekina)."""
     import torch
     import multiview
     import reconstruct
@@ -224,8 +269,8 @@ def generate(image: Image.Image, prompt: str, seed: int | None = None) -> Image.
             _set_stage(tr("Edycja obrazu…"))
             src = _fit(image.convert("RGB"))
             gen = torch.Generator("cpu").manual_seed(seed if seed is not None else int(time.time()) % 2**31)
-            out = pipe(image=src, prompt=prompt + PROMPT_SUFFIX, guidance_scale=GUIDANCE, num_inference_steps=STEPS,
-                       width=src.width, height=src.height, generator=gen).images[0]
+            out = pipe(image=src, prompt=prompt if raw else prompt + PROMPT_SUFFIX, guidance_scale=guidance,
+                       num_inference_steps=steps, width=src.width, height=src.height, generator=gen).images[0]
             _set_stage("idle")
             return out.convert("RGB")
         except Exception as exc:
