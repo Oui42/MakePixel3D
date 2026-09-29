@@ -2072,22 +2072,32 @@ async function rigModel() {
     setBusy(false);
     return;
   }
-  const poll = setInterval(async () => {
-    try {
-      const s = await (await fetch('/api/status')).json();
-      if (s.stage !== 'idle') setStatus('rigStatus', `${s.stage} – ${Math.round(s.elapsed)} s`, 'busy');
-    } catch { /* serwer zajęty */ }
-  }, 1000);
+  // zadanie w tle + odpytywanie co sekundę (jedno żądanie na 1–3 min nie wracało do okna programu – zgłoszenie użytkownika)
+  const id = state.libraryId;
   try {
     const form = new FormData();
     form.append('humanoid', $('objectKind').value === 'character');
-    const res = await postRaw(`/api/library/${state.libraryId}/rig`, form);
+    await postRaw(`/api/library/${id}/rig`, form);
+    let job;
+    for (;;) {
+      await new Promise((r) => setTimeout(r, 1000));
+      job = await (await fetch(`/api/library/${id}/rig`)).json();
+      if (job.done) break;
+      try {
+        const s = await (await fetch('/api/status')).json();
+        if (s.stage !== 'idle') setStatus('rigStatus', `${s.stage} – ${Math.round(s.elapsed)} s`, 'busy');
+      } catch { /* serwer zajęty – spróbujemy za sekundę */ }
+    }
+    if (job.error) throw new Error(job.error);
+    setStatus('rigStatus', t('Wczytywanie modelu ze szkieletem…'), 'busy');
+    const res = await fetch(`/api/library/${id}/rigged.glb?t=${Date.now()}`);
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
     const blob = await res.blob();
     state.glbBlob = blob;
     await loadGlb(await blob.arrayBuffer());
     state.glbFile = 'rigged.glb';
     refreshRecent();
-    if (res.headers.get('X-Rig-Fallback') === '1' && !state.rig?.humanoid) {   // rig.js mógł rozpoznać budowę po strukturze
+    if (job.fallback && !state.rig?.humanoid) {   // rig.js mógł rozpoznać budowę po strukturze
       // model nie dał kompletu kości postaci (VRoid) – jest szkielet ogólny, więc tylko animacje ogólne
       setStatus('rigStatus', t('Nie udało się rozpoznać budowy postaci – utworzono szkielet ogólny (animacje: kołysanie, podskok).'), 'err');
     } else {
@@ -2097,7 +2107,6 @@ async function rigModel() {
   } catch (e) {
     setStatus('rigStatus', e.message, 'err');
   } finally {
-    clearInterval(poll);
     setBusy(false);
   }
 }

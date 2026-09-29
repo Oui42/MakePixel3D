@@ -298,26 +298,48 @@ def api_rigging_install():
     return {**rigging.summary(), "available": True, "reasons": []}
 
 
+# Szkielet liczy się 1–3 min – jako ZADANIE W TLE z odpytywaniem, nie jedno długie żądanie HTTP (zgłoszenie 29.09.2026:
+# w oknie programu status pod „Utwórz szkielet” zostawał na zawsze, choć serwer skończył – długie żądanie nie wróciło).
+_rig_jobs: dict[str, dict] = {}
+
+
+def _rig_job(entry_id: str, glb: bytes, humanoid: bool):
+    job = _rig_jobs[entry_id]
+    try:
+        rigged, used_humanoid = rigging.rig(glb, humanoid)
+        library.save_rigged(entry_id, rigged, used_humanoid)
+        job.update(humanoid=used_humanoid, fallback=humanoid and not used_humanoid)
+    except Exception as exc:  # noqa: BLE001
+        import traceback
+        traceback.print_exc()
+        job["error"] = tr("Błąd tworzenia szkieletu: {exc}", exc=exc)
+    finally:
+        job["done"] = True
+
+
 @app.post("/api/library/{entry_id}/rig")
 async def api_library_rig(entry_id: str, humanoid: bool = Form(False)):
-    """Szkielet + wagi skórowania dla modelu z galerii → rigged.glb w tym samym wpisie (zwracany też w odpowiedzi)."""
+    """Start zadania: szkielet + wagi skórowania dla modelu z galerii → rigged.glb w tym samym wpisie.
+    Postęp: GET /api/library/{id}/rig (done/error/humanoid/fallback) + /api/status (etap); wynik: plik rigged.glb wpisu."""
     try:
         glb = library.file_path(entry_id, "model.glb").read_bytes()
     except KeyError:
         raise HTTPException(404, tr("Nie ma takiego wpisu w galerii."))
     if not rigging.installed():
         raise HTTPException(409, tr("Funkcja „Szkielet i animacje” nie jest zainstalowana."))
-    try:
-        rigged, used_humanoid = await anyio.to_thread.run_sync(rigging.rig, glb, humanoid)
-    except Exception as exc:  # noqa: BLE001
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(500, tr("Błąd tworzenia szkieletu: {exc}", exc=exc))
-    library.save_rigged(entry_id, rigged, used_humanoid)
-    # X-Rig-Fallback: proszono o szkielet postaci, ale UniRig nie dał kompletu kości VRoid – jest szkielet ogólny
-    headers = {"X-Rig-Humanoid": "1" if used_humanoid else "0",
-               "X-Rig-Fallback": "1" if humanoid and not used_humanoid else "0"}
-    return Response(rigged, media_type="model/gltf-binary", headers=headers)
+    if rigging.status["generating"]:
+        raise HTTPException(409, tr("Szkielet innego modelu jest właśnie liczony – poczekaj na jego koniec."))
+    _rig_jobs[entry_id] = {"done": False, "error": None, "humanoid": None, "fallback": False}
+    threading.Thread(target=_rig_job, args=(entry_id, glb, humanoid), daemon=True).start()
+    return {"started": True}
+
+
+@app.get("/api/library/{entry_id}/rig")
+def api_library_rig_status(entry_id: str):
+    job = _rig_jobs.get(entry_id)
+    if not job:
+        raise HTTPException(404, tr("Nie ma takiego zadania."))
+    return job
 
 
 @app.get("/api/capabilities")

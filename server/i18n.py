@@ -65,6 +65,8 @@ EN = {
     "Napisz, co zmienić na obrazie.": "Write what to change in the image.",
     "Model edycji obrazu nie jest zainstalowany.": "The image editing model is not installed.",
     "Błąd edycji obrazu: {exc}": "Image editing error: {exc}",
+    "Szkielet innego modelu jest właśnie liczony – poczekaj na jego koniec.": "A skeleton for another model is being computed – wait for it to finish.",
+    "Nie ma takiego zadania.": "No such job.",
     # S8: tekst → obraz
     "obraz: FLUX.1-schnell (6,8 GB)": "image: FLUX.1-schnell (6.8 GB)",
     "tekst: koder T5 (3,3 GB)": "text: T5 encoder (3.3 GB)",
