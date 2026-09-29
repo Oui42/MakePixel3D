@@ -120,6 +120,7 @@ body:not([data-stage="photo"]) [data-show="photo-only"] { display: none !importa
 
 /* blokada na czas usuwania tła / generowania modelu */
 body.busy .drop, body.busy #glbLabel, body.busy .welcome-actions { opacity: .5; pointer-events: none; }
+body.painting #viewer canvas { cursor: crosshair; }   /* S11: tryb przemalowania */
 
 .block { display: block; width: 100%; text-align: center; margin-top: 6px; }
 .or { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; margin: 10px 0 4px; }

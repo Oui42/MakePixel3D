@@ -34,11 +34,12 @@ export async function createEntry(modelBlob, sourceBlob, thumbBlob, name, kind =
 }
 
 /** „Zapisz w galerii”: stan pracy (JSON) + poprawione zdjęcie + miniatura z pixel-artem. */
-export async function saveProject(entryId, project, sourceBlob, thumbBlob) {
+export async function saveProject(entryId, project, sourceBlob, thumbBlob, modelBlob = null, modelName = 'model.glb') {
   const form = new FormData();
   form.append('project', new Blob([JSON.stringify(project)], { type: 'application/json' }), 'project.json');
   if (sourceBlob) form.append('source', sourceBlob, 'source.png');
   if (thumbBlob) form.append('thumb', thumbBlob, 'thumb.png');
+  if (modelBlob) { form.append('model', modelBlob, modelName); form.append('model_name', modelName); }   // S11: przemalowany model
   return send(`/api/library/${entryId}/project`, 'PUT', form);
 }
 

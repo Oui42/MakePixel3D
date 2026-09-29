@@ -43,6 +43,7 @@ import reconstruct  # noqa: E402
 import rigging  # noqa: E402
 import settings  # noqa: E402
 import text2image  # noqa: E402
+import imageedit  # noqa: E402
 import updater  # noqa: E402
 from i18n import tr  # noqa: E402
 
@@ -81,6 +82,8 @@ def api_status():
         st = multiview.status
     if rigging.status["generating"]:     # S10: szkielet (UniRig)
         st = rigging.status
+    if imageedit.status["generating"]:   # S11: edycja obrazu (FLUX Kontext)
+        st = imageedit.status
     elapsed = time.time() - st["started"] if st["started"] and st["stage"] != "idle" else 0
     dev, dev_name = reconstruct.device_if_ready()   # None, dopóki PyTorch wczytuje się w tle
     return {
@@ -234,6 +237,36 @@ async def api_text2image(request: Request):
 
 
 # ---------- S9: lepszy tył obiektu (silnik InstantMesh, instalowany na żądanie) ----------
+@app.get("/api/imageedit")
+def api_imageedit_status():
+    feat = capabilities.features()["imageedit"]
+    return {**imageedit.summary(), "available": feat["available"], "reasons": feat["reasons"]}
+
+
+@app.post("/api/imageedit/install")
+def api_imageedit_install():
+    feat = capabilities.features()["imageedit"]
+    if not feat["available"]:
+        raise HTTPException(409, "; ".join(feat["reasons"]))
+    imageedit.install_in_background()
+    return {**imageedit.summary(), "available": True, "reasons": []}
+
+
+@app.post("/api/imageedit")
+async def api_imageedit(file: UploadFile = File(...), prompt: str = Form(""), seed: str = Form("")):
+    """S11: obraz (obiekt na białym tle) + polecenie → zmieniony obraz PNG (dalej jak zwykłe zdjęcie: tło, model 3D)."""
+    image = await _read_image(file)
+    try:
+        out = await anyio.to_thread.run_sync(imageedit.generate, image, prompt, int(seed) if seed.strip() else None)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+    except Exception as exc:  # noqa: BLE001
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(500, tr("Błąd edycji obrazu: {exc}", exc=exc))
+    return _png(out)
+
+
 @app.get("/api/multiview")
 def api_multiview_status():
     feat = capabilities.features()["multiview"]
@@ -387,14 +420,20 @@ async def api_library_project(
     project: UploadFile = File(...),
     source: UploadFile | None = File(None),
     thumb: UploadFile | None = File(None),
+    model: UploadFile | None = File(None),          # S11: model z przemalowanymi kolorami wierzchołków
+    model_name: str = Form("model.glb"),            # model.glb | rigged.glb – ten plik, który był otwarty
 ):
-    """„Zapisz w galerii” – ustawienia, obrót modelu, poprawki pikseli, poprawione tło, miniatura."""
+    """„Zapisz w galerii” – ustawienia, obrót modelu, poprawki pikseli, poprawione tło, miniatura (i przemalowany model)."""
+    if model_name not in ("model.glb", "rigged.glb"):
+        raise HTTPException(422, "model_name")
     try:
         return library.save_project(
             entry_id,
             await project.read(),
             await source.read() if source else None,
             await thumb.read() if thumb else None,
+            await model.read() if model else None,
+            model_name,
         )
     except KeyError:
         raise HTTPException(404, tr("Nie ma takiego wpisu w galerii."))

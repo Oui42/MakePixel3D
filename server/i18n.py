@@ -54,6 +54,17 @@ EN = {
     "Opisujesz obiekt słowami, a program sam tworzy obraz, model 3D i sprite'y (bez szukania zdjęć).":
         "Describe an object in words and the program creates the image, 3D model and sprites (no photo needed).",
     "Lepszy tył obiektu": "Better back side",
+    "Edycja obrazu (dodaj, zmień)": "Image editing (add, change)",
+    "Zmieniasz gotowy obraz poleceniem („dodaj miecz”, „zielone spodnie”), a potem generujesz model 3D od nowa.":
+        "Change a finished image with an instruction (\"add a sword\", \"green trousers\"), then generate the 3D model again.",
+    "składniki wspólne z „Tekst → obraz” (10,6 GB)": "components shared with \"Text → image\" (10.6 GB)",
+    "edycja: FLUX.1 Kontext (6,8 GB)": "editing: FLUX.1 Kontext (6.8 GB)",
+    "konfiguracja pipeline'u": "pipeline configuration",
+    "Wczytywanie modelu edycji (pierwszy raz trwa dłużej)…": "Loading the editing model (the first time takes longer)…",
+    "Edycja obrazu…": "Editing the image…",
+    "Napisz, co zmienić na obrazie.": "Write what to change in the image.",
+    "Model edycji obrazu nie jest zainstalowany.": "The image editing model is not installed.",
+    "Błąd edycji obrazu: {exc}": "Image editing error: {exc}",
     # S8: tekst → obraz
     "obraz: FLUX.1-schnell (6,8 GB)": "image: FLUX.1-schnell (6.8 GB)",
     "tekst: koder T5 (3,3 GB)": "text: T5 encoder (3.3 GB)",

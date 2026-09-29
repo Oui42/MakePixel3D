@@ -75,6 +75,7 @@ status = {
 }
 _lock = threading.Lock()
 _pipe = None
+_t5 = None   # koder T5 (bf16, 9,5 GB RAM) – wspólny dla S8 i S11 (imageedit), patrz get_t5()
 
 
 def _trust_windows_certificates():
@@ -120,12 +121,27 @@ def _size_of_downloads() -> int:
     return total
 
 
-def _install():
+def download_all():
+    """Pobranie wszystkich plików S8 (także z instalacji S11, gdy S8 brakuje). Wyjątek = błąd pobierania."""
     _trust_windows_certificates()
     os.environ.pop("HF_HUB_OFFLINE", None)
     os.environ.pop("TRANSFORMERS_OFFLINE", None)
     from huggingface_hub import hf_hub_download, snapshot_download
     CACHE.mkdir(parents=True, exist_ok=True)
+    status["current"] = tr("obraz: FLUX.1-schnell (6,8 GB)")
+    hf_hub_download(TRANSFORMER[0], TRANSFORMER[1], cache_dir=CACHE)
+    status["current"] = tr("tekst: koder T5 (3,3 GB)")
+    hf_hub_download(T5[0], T5[1], cache_dir=CACHE)
+    status["current"] = tr("pozostałe składniki (0,5 GB)")
+    snapshot_download(BASE_REPO, cache_dir=CACHE, allow_patterns=BASE_PATTERNS)
+    if not installed():
+        raise RuntimeError(tr("po pobraniu brakuje plików modelu"))
+    DIR.mkdir(parents=True, exist_ok=True)
+    INSTALLED_FLAG.write_text(json.dumps({"installed": time.strftime("%Y-%m-%d"), "transformer": TRANSFORMER[1],
+                                          "t5": T5[1]}), encoding="utf-8")
+
+
+def _install():
     stop = threading.Event()
 
     def watch():
@@ -134,17 +150,7 @@ def _install():
 
     threading.Thread(target=watch, daemon=True).start()
     try:
-        status["current"] = tr("obraz: FLUX.1-schnell (6,8 GB)")
-        hf_hub_download(TRANSFORMER[0], TRANSFORMER[1], cache_dir=CACHE)
-        status["current"] = tr("tekst: koder T5 (3,3 GB)")
-        hf_hub_download(T5[0], T5[1], cache_dir=CACHE)
-        status["current"] = tr("pozostałe składniki (0,5 GB)")
-        snapshot_download(BASE_REPO, cache_dir=CACHE, allow_patterns=BASE_PATTERNS)
-        if not installed():
-            raise RuntimeError(tr("po pobraniu brakuje plików modelu"))
-        DIR.mkdir(parents=True, exist_ok=True)
-        INSTALLED_FLAG.write_text(json.dumps({"installed": time.strftime("%Y-%m-%d"), "transformer": TRANSFORMER[1],
-                                              "t5": T5[1]}), encoding="utf-8")
+        download_all()
         status["progress"] = 1.0
     except Exception as exc:  # noqa: BLE001
         status["error"] = tr("Nie udało się pobrać modelu: {exc}", exc=exc)
@@ -168,24 +174,38 @@ def _set_stage(stage: str):
     print(f"[text2image] {stage}", flush=True)
 
 
+def get_base() -> str:
+    """Folder składników bazowych FLUX (CLIP, VAE, tokenizery, scheduler) w cache – wspólne dla S8 i S11."""
+    from huggingface_hub import snapshot_download
+    return snapshot_download(BASE_REPO, cache_dir=CACHE, allow_patterns=BASE_PATTERNS, local_files_only=True)
+
+
+def get_t5():
+    """Koder T5-XXL z GGUF (dekwantyzowany do bf16, ~9,5 GB RAM, 81 s) – jeden egzemplarz dla S8 i S11."""
+    global _t5
+    if _t5 is None:
+        import torch
+        from transformers import T5EncoderModel
+        _t5 = T5EncoderModel.from_pretrained(T5[0], gguf_file=T5[1], cache_dir=CACHE, torch_dtype=torch.bfloat16,
+                                             local_files_only=True)
+    return _t5
+
+
 def _load():
     global _pipe
     if _pipe is not None:
         return _pipe
     import torch
     from diffusers import FluxPipeline, FluxTransformer2DModel, GGUFQuantizationConfig
-    from huggingface_hub import hf_hub_download, snapshot_download
-    from transformers import T5EncoderModel
+    from huggingface_hub import hf_hub_download
 
     _set_stage(tr("Wczytywanie modelu obrazu (pierwszy raz trwa dłużej)…"))
-    base = snapshot_download(BASE_REPO, cache_dir=CACHE, allow_patterns=BASE_PATTERNS, local_files_only=True)
+    base = get_base()
     tf_path = hf_hub_download(TRANSFORMER[0], TRANSFORMER[1], cache_dir=CACHE, local_files_only=True)
     transformer = FluxTransformer2DModel.from_single_file(
         tf_path, quantization_config=GGUFQuantizationConfig(compute_dtype=torch.bfloat16),
         config=base, subfolder="transformer", torch_dtype=torch.bfloat16)
-    t5 = T5EncoderModel.from_pretrained(T5[0], gguf_file=T5[1], cache_dir=CACHE, torch_dtype=torch.bfloat16,
-                                        local_files_only=True)
-    pipe = FluxPipeline.from_pretrained(base, transformer=transformer, text_encoder_2=t5, torch_dtype=torch.bfloat16)
+    pipe = FluxPipeline.from_pretrained(base, transformer=transformer, text_encoder_2=get_t5(), torch_dtype=torch.bfloat16)
     pipe.set_progress_bar_config(disable=True)
     pipe.enable_model_cpu_offload()   # każdy składnik na karcie tylko wtedy, gdy pracuje – mieści się w 12 GB
     _pipe = pipe
@@ -194,12 +214,14 @@ def _load():
 
 
 def unload():
-    """Zwolnienie pamięci (RAM ~17 GB i karta) – np. gdy użytkownik długo nie generuje albo przed pracą innej funkcji."""
-    global _pipe
+    """Zwolnienie pamięci (RAM ~17 GB i karta) – np. gdy użytkownik długo nie generuje albo przed pracą innej funkcji.
+    T5 jest wspólny z S11 – znika z RAM dopiero, gdy żaden pipeline go nie trzyma (imageedit.unload() też)."""
+    global _pipe, _t5
     with _lock:
-        if _pipe is None:
+        if _pipe is None and _t5 is None:
             return
         _pipe = None
+        _t5 = None
         status["loaded"] = False
         import gc
         import torch

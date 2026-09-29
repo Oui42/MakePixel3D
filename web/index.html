@@ -112,6 +112,19 @@
             <button id="btnT2I" class="block primary" type="button">Wygeneruj obraz z opisu</button>
             <p id="t2iStatus" class="status"></p>
           </div>
+          <!-- S11: edycja obrazu przez AI (FLUX Kontext) – widoczne, gdy funkcja zainstalowana i jest obraz -->
+          <div id="editBlock" data-show="photo" hidden>
+            <div class="or"><span>zmiana</span></div>
+            <label class="lbl" for="editPrompt">Zmień obraz przez AI</label>
+            <textarea id="editPrompt" rows="2" placeholder="np. add a sword in the right hand" title="Po angielsku, jedno polecenie naraz. Reszta obrazu (postać, poza, styl) zostaje – program dopisuje to sam. Po zmianie wygeneruj model 3D od nowa."></textarea>
+            <div class="row">
+              <label for="editSeed" title="To samo ziarno = ten sam wynik dla tego samego polecenia">Ziarno</label>
+              <input id="editSeed" type="number" min="0" max="2147483647" placeholder="losowe" title="To samo ziarno = ten sam wynik dla tego samego polecenia">
+            </div>
+            <button id="btnEdit" class="block primary" type="button">Zmień obraz (AI, ok. 1–2 min)</button>
+            <button id="btnEditUndo" class="block" type="button" hidden>Przywróć obraz sprzed zmiany</button>
+            <p id="editStatus" class="status"></p>
+          </div>
         </section>
       </div>
 
@@ -340,6 +353,24 @@
           </div>
           <label class="check" data-show="model"><input id="matchPhoto" type="checkbox" checked> Dopasuj kolory modelu do zdjęcia</label>
           <label class="check"><input id="removeOrphans" type="checkbox" checked> Usuń pojedyncze piksele</label>
+          <!-- S11: przemalowanie fragmentu modelu (kolory wierzchołków; zapis do GLB przy „Zapisz w galerii”) -->
+          <div id="paintBlock" data-show="model">
+            <h3>Przemaluj fragment modelu</h3>
+            <div class="row">
+              <label for="paintColor" title="Barwa fragmentu po przemalowaniu – cieniowanie (jaśniej/ciemniej) zostaje">Nowy kolor</label>
+              <input id="paintColor" type="color" value="#4caf50" title="Barwa fragmentu po przemalowaniu">
+            </div>
+            <div class="row slider">
+              <label for="paintTolerance" title="Jak bardzo kolor sąsiednich miejsc może się różnić, żeby jeszcze należały do klikniętego fragmentu">Zasięg <output id="paintToleranceOut"></output></label>
+              <input id="paintTolerance" type="range" min="2" max="60" step="1" value="18">
+            </div>
+            <button id="btnPaint" class="block" type="button" title="Włącz i kliknij fragment modelu na podglądzie 3D (obracanie nadal działa – przeciąganie)">Przemaluj: kliknij fragment na podglądzie 3D</button>
+            <div class="row" id="paintActions" hidden>
+              <button id="btnPaintUndo" type="button">Cofnij</button>
+              <button id="btnPaintReset" type="button">Przywróć oryginalne kolory</button>
+            </div>
+            <p id="paintStatus" class="status"></p>
+          </div>
         </section>
       </div>
 

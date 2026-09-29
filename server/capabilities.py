@@ -29,6 +29,12 @@ FEATURES = {
         "description": "AI dorysowuje widoki z innych stron, zanim powstanie model 3D – wyraźnie lepsze boki i tył.",
         "vram": 8, "ram": 16, "disk": 12,
     },
+    "imageedit": {
+        "name": "Edycja obrazu (dodaj, zmień)",
+        "description": "Zmieniasz gotowy obraz poleceniem („dodaj miecz”, „zielone spodnie”), a potem generujesz model 3D od nowa.",
+        # FLUX.1 Kontext dev GGUF Q4 (6,8 GB) + składniki S8 (T5, CLIP, VAE) – te same wymagania co „Tekst → obraz”
+        "vram": 10, "ram": 24, "disk": 10,
+    },
     "rigging": {
         "name": "Szkielet i animacje ruchu",
         "description": "Automatyczny szkielet postaci i gotowe animacje (chodzenie, bieg, atak).",

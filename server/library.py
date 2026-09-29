@@ -55,11 +55,15 @@ def _write_meta(d: Path, info: dict) -> None:
     (d / "meta.json").write_text(json.dumps(info, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
-def save_project(entry_id: str, project_json: bytes, source_png: bytes | None, thumb_png: bytes | None) -> dict:
-    """„Zapisz w galerii”: stan pracy + (opcjonalnie) poprawione zdjęcie i miniatura z aktualnym pixel-artem."""
+def save_project(entry_id: str, project_json: bytes, source_png: bytes | None, thumb_png: bytes | None,
+                 model_glb: bytes | None = None, model_name: str = "model.glb") -> dict:
+    """„Zapisz w galerii”: stan pracy + (opcjonalnie) poprawione zdjęcie, miniatura z aktualnym pixel-artem
+    i model z przemalowanymi kolorami (S11; nadpisuje ten plik GLB, który był otwarty)."""
     d = _dir(entry_id)
     json.loads(project_json)   # tylko poprawny JSON – uszkodzony zapis nie może nadpisać dobrego
     (d / "project.json").write_bytes(project_json)
+    if model_glb and model_name in FILES:
+        (d / model_name).write_bytes(model_glb)
     if source_png:
         (d / "source.png").write_bytes(source_png)
     if thumb_png:

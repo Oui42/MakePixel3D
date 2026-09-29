@@ -15,6 +15,8 @@ import { t, getLang, setLang, locale, translateDom } from './i18n.js';
 import { imageDataFromBlob, imageDataToBlob, cropToObject, MaskEditor } from './mask.js';
 import { PixelEditor } from './editor.js';
 import { findRig, resetPose, clipNames, buildClip, setArmsDown, CLIP_LABELS } from './rig.js';
+import { regionFromHit, recolor, restoreColors, hexToRgb as paintHex } from './paint.js';
+import { patchGlbColors } from './glbcolors.js';
 import {
   listEntries, fetchFile, renameEntry, deleteEntry, renderTiles, createEntry, saveProject, fetchProject,
 } from './gallery.js';
@@ -38,6 +40,12 @@ const state = {
   cutoutImg: null,
   refStats: null,     // statystyki kolorów zdjęcia (do dopasowania kolorów modelu)
   glbBlob: null,
+  glbBuffer: null,    // S11: oryginalne bajty GLB + parser (associations) – do zapisu przemalowanych kolorów
+  gltfParser: null,
+  glbFile: 'model.glb',   // który plik wpisu galerii jest otwarty (rigged.glb po szkielecie) – tam trafia przemalowanie
+  painted: false,     // S11: kolory wierzchołków zmienione od wczytania (do zapisu w galerii)
+  painting: false,    // S11: tryb „kliknij fragment na podglądzie”
+  editPrev: null,     // S11: obraz źródłowy sprzed edycji AI (przywracanie)
   model: null,        // THREE.Object3D z wczytanego GLB
   meshes: [],         // siatki modelu
   symMesh: null,      // siatka symetryczna (gdy symetria włączona – zamiast modelu)
@@ -111,6 +119,7 @@ const sprite = new SpriteRenderer();
 // ---------- Ustawienia z formularza ----------
 const num = (id) => Number($(id).value);
 const OUTPUTS = {
+  paintTolerance: (v) => `${v}%`,
   pitch: (v) => `${v}°`, zoom: (v) => `${v}%`, baseYaw: (v) => `${v}°`, voxelRes: (v) => t('{v} na bok', { v }),
   colors: (v) => (+v === 0 ? t('bez limitu') : v), dither: (v) => (+v === 0 ? t('wył.') : `${v}%`),
   saturation: (v) => `${v}%`, contrast: (v) => `${v}%`,
@@ -287,6 +296,10 @@ async function loadGlb(buffer) {
   const gltf = await new GLTFLoader().parseAsync(buffer, '');
   if (state.model) norm.remove(state.model);
   state.model = gltf.scene;
+  state.glbBuffer = buffer;
+  state.gltfParser = gltf.parser;
+  state.glbFile = 'model.glb';
+  resetPaint();
   norm.add(state.model);
   norm.position.set(0, 0, 0); norm.scale.setScalar(1);
   norm.updateMatrixWorld(true);
@@ -756,7 +769,7 @@ function setStage(stage) {
 /** Na czas usuwania tła / generowania blokujemy wszystko, co mogłoby podmienić zdjęcie lub model. */
 function setBusy(on) {
   document.body.classList.toggle('busy', on);
-  for (const id of ['file', 'glbFile', 'welcomePhoto', 'welcomeGlb', 'welcomeText', 'quality', 'engine', 'removeBg', 'btnMask', 'btnT2I', 't2iPrompt', 'btnRig', 'rigType', 'objectKind']) $(id).disabled = on;
+  for (const id of ['file', 'glbFile', 'welcomePhoto', 'welcomeGlb', 'welcomeText', 'quality', 'engine', 'removeBg', 'btnMask', 'btnT2I', 't2iPrompt', 'btnRig', 'rigType', 'objectKind', 'btnEdit', 'editPrompt', 'btnPaint']) $(id).disabled = on;
   $('btnGenerate').disabled = on || !state.cutoutBlob;
 }
 
@@ -1328,6 +1341,7 @@ async function openEntry(entry) {
     state.glbBlob = glb;
     state.libraryId = entry.id;
     await loadGlb(await glb.arrayBuffer());
+    state.glbFile = entry.rigged ? 'rigged.glb' : 'model.glb';
     const project = await fetchProject(entry);
     if (project) applyProject(project);
     else if (entry.kind) { setField('objectKind', entry.kind); renderKindUi(); }
@@ -1414,7 +1428,9 @@ async function saveToGallery() {
   try {
     const thumb = await galleryThumb();
     if (!state.libraryId) state.libraryId = await createEntry(state.glbBlob, state.sourceBlob, thumb, state.baseName, $('objectKind').value);
-    await saveProject(state.libraryId, projectData(), state.sourceBlob, thumb);
+    // S11: przemalowany model nadpisuje otwarty plik GLB wpisu (model.glb albo rigged.glb)
+    await saveProject(state.libraryId, projectData(), state.sourceBlob, thumb, state.painted ? state.glbBlob : null, state.glbFile);
+    state.painted = false;
     state.dirty = false;
     state.savedAt = new Date();
     updateSaveStatus();
@@ -1665,6 +1681,160 @@ $('objectKind').addEventListener('input', renderKindUi);
 renderKindUi();   // stan zapamiętany z poprzedniej sesji (SAVED_FIELDS)
 
 $('btnT2I').addEventListener('click', generateFromText);
+
+// ---------- S11: edycja obrazu przez AI (FLUX Kontext na serwerze) ----------
+let editInfo = null;
+function renderEditUi() {
+  $('editBlock').hidden = !editInfo?.installed;
+}
+async function checkImageEdit() {
+  try { editInfo = await (await fetch('/api/imageedit')).json(); renderEditUi(); } catch { /* serwer niedostępny */ }
+  return editInfo;
+}
+
+/** Obraz źródłowy (z maską w alfie) złożony na białym tle – wejście edycji; tło poza maską znika, jak w obrazie z opisu. */
+async function sourceOnWhite() {
+  const { width: w, height: h, data } = state.source;
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, w, h);
+  ctx.drawImage(await createImageBitmap(new ImageData(new Uint8ClampedArray(data), w, h)), 0, 0);
+  return canvasBlob(c);
+}
+
+async function editImage() {
+  const prompt = $('editPrompt').value.trim();
+  if (!prompt) { setStatus('editStatus', t('Napisz, co zmienić na obrazie.'), 'err'); return; }
+  if (!state.source || document.body.classList.contains('busy') || !confirmDiscard()) return;
+  setBusy(true);
+  setStatus('editStatus', t('Edycja obrazu (AI)… Za pierwszym razem wczytanie modelu trwa około minuty.'), 'busy');
+  const poll = setInterval(async () => {
+    try {
+      const s = await (await fetch('/api/status')).json();
+      if (s.stage !== 'idle') setStatus('editStatus', `${s.stage} – ${Math.round(s.elapsed)} s`, 'busy');
+    } catch { /* serwer zajęty */ }
+  }, 1000);
+  try {
+    const form = new FormData();
+    form.append('file', await sourceOnWhite(), 'source.png');
+    form.append('prompt', prompt);
+    form.append('seed', $('editSeed').value);
+    const blob = await post('/api/imageedit', form);
+    clearInterval(poll);
+    const prev = state.sourceBlob;
+    setStatus('editStatus', t('Obraz zmieniony – usuwanie tła…'), 'busy');
+    setBusy(false);
+    await handleFile(new File([blob], `${state.baseName}_edit.png`, { type: 'image/png' }));
+    state.editPrev = prev;
+    $('btnEditUndo').hidden = false;
+    setStatus('editStatus', t('Obraz zmieniony. Sprawdź wycięcie, potem wygeneruj model 3D od nowa (zakładka Model).'));
+    setTab('source');   // użytkownik ma zobaczyć wynik i ewentualnie cofnąć
+  } catch (e) {
+    setStatus('editStatus', e.message, 'err');
+  } finally {
+    clearInterval(poll);
+    setBusy(false);
+  }
+}
+
+async function undoEdit() {
+  if (!state.editPrev || document.body.classList.contains('busy') || !confirmDiscard()) return;
+  try {
+    await setSource(state.editPrev);
+    resetModel();
+    setStage('photo');
+    scheduleRefresh();
+    setStatus('editStatus', t('Przywrócono obraz sprzed zmiany.'));
+  } catch (e) {
+    setStatus('editStatus', e.message, 'err');
+  }
+  state.editPrev = null;
+  $('btnEditUndo').hidden = true;
+}
+$('btnEdit').addEventListener('click', editImage);
+$('btnEditUndo').addEventListener('click', undoEdit);
+$('editPrompt').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) editImage(); });
+checkImageEdit();
+
+// ---------- S11: przemalowanie fragmentu modelu (paint.js) ----------
+const paintUndo = [];   // [{ mesh, indices, old }]
+const raycaster = new THREE.Raycaster();
+let paintDown = null;
+
+function resetPaint() {
+  paintUndo.length = 0;
+  state.painted = false;
+  setPainting(false);
+  $('paintActions').hidden = true;
+  setStatus('paintStatus', '');
+}
+
+function setPainting(on) {
+  state.painting = on;
+  document.body.classList.toggle('painting', on);
+  $('btnPaint').classList.toggle('primary', on);
+  $('btnPaint').textContent = on ? t('Kliknij fragment modelu na podglądzie 3D (Esc = koniec)') : t('Przemaluj: kliknij fragment na podglądzie 3D');
+}
+
+/** Po każdej zmianie kolorów: nowy plik GLB (do galerii, „Zapisz model”, szkieletu), symetria/woksele od nowa, sprite'y. */
+function afterPaint() {
+  state.painted = true;
+  $('paintActions').hidden = !paintUndo.length;
+  try {
+    state.glbBlob = new Blob([patchGlbColors(state.glbBuffer, state.gltfParser, state.meshes)], { type: 'model/gltf-binary' });
+  } catch (e) {
+    console.warn('GLB colors not written:', e);
+    setStatus('paintStatus', t('Przemalowanie widać w sprite\'ach, ale nie da się go zapisać do pliku modelu.'), 'warn');
+  }
+  markDirty();
+  updateOrientation();
+}
+
+function paintAt(e) {
+  const r = viewer.domElement.getBoundingClientRect();
+  const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  raycaster.setFromCamera(ndc, viewCam);
+  const hit = raycaster.intersectObjects(state.meshes, false)[0];
+  if (!hit) { setStatus('paintStatus', t('Kliknij w model.'), 'warn'); return; }
+  const region = regionFromHit(hit.object, hit.faceIndex, num('paintTolerance') / 100);
+  if (!region) {
+    setStatus('paintStatus', t('Ten model nie ma kolorów wierzchołków (np. ma teksturę) – przemalowanie nie działa.'), 'err');
+    return;
+  }
+  const old = recolor(hit.object, region.indices, paintHex($('paintColor').value));
+  paintUndo.push({ mesh: hit.object, indices: region.indices, old });
+  afterPaint();
+  setStatus('paintStatus', t('Przemalowano fragment ({n} wierzchołków). Za mało lub za dużo? Zmień „Zasięg” i cofnij.', { n: region.indices.length }));
+}
+
+viewer.domElement.addEventListener('pointerdown', (e) => { paintDown = [e.clientX, e.clientY]; });
+viewer.domElement.addEventListener('pointerup', (e) => {
+  const down = paintDown;
+  paintDown = null;
+  if (!state.painting || !down || !state.model || document.body.classList.contains('busy')) return;
+  if (Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 4) return;   // przeciąganie = obracanie, nie malowanie
+  paintAt(e);
+});
+$('btnPaint').addEventListener('click', () => {
+  if (!state.model) return;
+  setPainting(!state.painting);
+  if (state.painting && (state.symMesh || state.voxel)) setStatus('paintStatus', t('Klikaj w oryginalny model – symetria i woksele przeliczą się po przemalowaniu.'));
+});
+$('btnPaintUndo').addEventListener('click', () => {
+  const last = paintUndo.pop();
+  if (!last) return;
+  restoreColors(last.mesh, last.indices, last.old);
+  afterPaint();
+  setStatus('paintStatus', paintUndo.length ? '' : t('Kolory oryginalne.'));
+});
+$('btnPaintReset').addEventListener('click', () => {
+  while (paintUndo.length) { const p = paintUndo.pop(); restoreColors(p.mesh, p.indices, p.old); }
+  afterPaint();
+  setStatus('paintStatus', t('Kolory oryginalne.'));
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && state.painting) setPainting(false); });
 $('t2iPrompt').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) generateFromText(); });
 checkT2I();   // czy funkcja jest zainstalowana → przyciski w Źródle i na ekranie startowym
 
@@ -1688,6 +1858,9 @@ const FEATURE_UI = {
   multiview: { api: '/api/multiview', check: checkMultiview, info: () => mvInfo,
     done: () => t('Funkcja „Lepszy tył obiektu” jest gotowa. W zakładce Model pojawił się wybór silnika 3D.'),
     note: () => t('Licencja: wagi modelu Zero123++ są na licencji CC-BY-NC 4.0 (bez użycia w produktach komercyjnych); wygenerowane modele i sprite\'y możesz wykorzystywać dowolnie.') },
+  imageedit: { api: '/api/imageedit', check: checkImageEdit, info: () => editInfo,
+    done: () => t('Funkcja „Edycja obrazu” jest gotowa. W zakładce Źródło (przy wgranym obrazie) pojawiło się pole „Zmień obraz przez AI”.'),
+    note: () => t('Licencja: wagi modelu FLUX.1 Kontext dev są niekomercyjne (FluxDev Non-Commercial License); wyniki możesz wykorzystywać na własny użytek. Korzysta ze składników funkcji „Tekst → obraz” (pobierze je, jeśli ich brak).') },
   rigging: { api: '/api/rigging', check: () => checkRigging(), info: () => rigInfo,
     done: () => t('Funkcja „Szkielet i animacje” jest gotowa. W zakładce Model pojawił się przycisk „Utwórz szkielet”.'),
     note: () => t('Instaluje własny Python 3.11 z Blenderem (bpy) i UniRig (MIT) – ok. 10 GB.') },
@@ -1883,6 +2056,7 @@ async function rigModel() {
     const blob = await res.blob();
     state.glbBlob = blob;
     await loadGlb(await blob.arrayBuffer());
+    state.glbFile = 'rigged.glb';
     refreshRecent();
     if (res.headers.get('X-Rig-Fallback') === '1') {
       // model nie dał kompletu kości postaci (VRoid) – jest szkielet ogólny, więc tylko animacje ogólne
